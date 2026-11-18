@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Varal — 6-Board Interactive Grayscale Wireframe</title>
+  <style>
+    :root {
+      --bg-canvas: #e8e8e6;
+      --bg-dot: #cfcfcb;
+      --ink: #1a1a18;
+      --ink-muted: #5a5a55;
+      --ink-faint: #8c8c85;
+      --paper: #fafaf7;
+      --paper-alt: #f0f0eb;
+      --paper-border: #222220;
+      --pin-fill: #d2d2cc;
+      --shadow: rgba(20, 20, 18, 0.14);
+      --menubar-bg: #deded9;
+      --dock-bg: rgba(235, 235, 230, 0.78);
+      --font-mono: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    }
+
+    body.night-mode {
+      --bg-canvas: #171716;
+      --bg-dot: #2c2c29;
+      --ink: #e6e6e1;
+      --ink-muted: #a0a099;
+      --ink-faint: #686862;
+      --paper: #262624;
+      --paper-alt: #2f2f2c;
+      --paper-border: #b8b8b0;
+      --pin-fill: #4a4a45;
+      --shadow: rgba(0, 0, 0, 0.55);
+      --menubar-bg: #1f1f1d;
+      --dock-bg: rgba(38, 38, 35, 0.82);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #111;
+      color: var(--ink);
+      font-family: var(--font-sans);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      gap: 12px;
+    }
+
+    /* Wireframe Control Header (Outside Screen Frame) */
+    .wireframe-toolbar {
+      width: 100%;
+      max-width: 1240px;
+      background: #222220;
+      color: #f4f4f0;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .board-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .board-btn, .env-btn {
+      background: #333330;
+      color: #dcdcd6;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 5px 9px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .board-btn:hover, .env-btn:hover {
+      background: #484843;
+    }
+
+    .board-btn.active, .env-btn.active {
+      background: #f4f4f0;
+      color: #111;
+      border-color: #fff;
+      font-weight: 600;
+    }
+
+    .env-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* Desktop Monitor Frame */
+    .mac-screen {
+      position: relative;
+      width: 100%;
+      max-width: 1240px;
+      height: 680px;
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(var(--bg-dot) 1px, transparent 1px);
+      background-size: 18px 18px;
+      border: 2px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      transition: background-color 0.35s ease;
+    }
+
+    /* macOS Menu Bar */
+    .mac-menubar {
+      position: relative;
+      z-index: 40;
+      height: 28px;
+      background: var(--menubar-bg);
+      border-bottom: 1px solid var(--paper-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .menubar-left, .menubar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .menubar-item.bold {
+      font-weight: 700;
+    }
+
+    .varal-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border: 1px solid var(--paper-border);
+      border-radius: 4px;
+      background: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .varal-status-pill:hover {
+      background: var(--paper-alt);
+    }
+
+    /* Ambient Nocturnal Layer (Stars, Satellite, Fireflies) */
+    .nocturnal-layer {
+      position: absolute;
+      inset: 28px 0 0 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      z-index: 1;
+    }
+
+    body.night-mode .nocturnal-layer {
+      opacity: 1;
+    }
+
+    .star {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+    }
+
+    .satellite-track {
+      position: absolute;
+      top: 18px;
+      left: 16%;
+      width: 340px;
+      height: 40px;
+      border-top: 1px dashed var(--ink-faint);
+      transform: rotate(-4deg);
+    }
+
+    .satellite-dot {
+      position: absolute;
+      top: -6px;
+      left: 0;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--ink);
+      background: var(--bg-canvas);
+      padding: 0 4px;
+      animation: satMove 18s linear infinite;
+    }
+
+    @keyframes satMove {
+      0% { left: 0%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { left: 92%; opacity: 0; }
+    }
+
+    .firefly {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border: 1px dashed var(--ink-muted);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fireflyFloat 5s ease-in-out infinite alternate;
+    }
+
+    .firefly::after {
+      content: "";
+      width: 4px;
+      height: 4px;
+      background: var(--ink);
+      border-radius: 50%;
+    }
+
+    @keyframes fireflyFloat {
+      0% { transform: translate(0, 0) scale(0.85); opacity: 0.35; }
+      100% { transform: translate(18px, -14px) scale(1.1); opacity: 0.95; }
+    }
+
+    /* Weather Particles Layer (Rain / Snow spilled from Atmos) */
+    .weather-spill-layer {
+      position: absolute;
+      inset: 28px 0 0 0;
+      pointer-events: none;
+      z-index: 6;
+      overflow: hidden;
+    }
+
+    .precip-particle {
+      position: absolute;
+      color: var(--ink-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      animation: fallDown 2.6s linear infinite;
+    }
+
+    @keyframes fallDown {
+      0% { transform: translateY(-10px) translateX(0); opacity: 0; }
+      20% { opacity: 0.85; }
+      100% { transform: translateY(340px) translateX(36px); opacity: 0; }
+    }
+
+    /* Clothesline SVG Layer */
+    .clothesline-svg {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      width: 100%;
+      height: 160px;
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    .rope-path {
+      fill: none;
+      stroke: var(--ink);
+      stroke-width: 2;
+    }
+
+    .rope-baseline-ref {
+      fill: none;
+      stroke: var(--ink-faint);
+      stroke-width: 1;
+      stroke-dasharray: 4 4;
+    }
+
+    /* Hanging Stage (Wallpaper-Level Items) */
+    .clothesline-stage {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 28px);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* Clothespin Geometry */
+    .clothespin {
+      position: absolute;
+      top: -15px;
+      width: 10px;
+      height: 24px;
+      background: var(--pin-fill);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 2px;
+      z-index: 8;
+    }
+
+    .clothespin::after {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 1px;
+      right: 1px;
+      height: 2px;
+      background: var(--paper-border);
+    }
+
+    /* Snow cap on pins/cards when snowing */
+    body.weather-snow .clothespin::before,
+    body.weather-snow .big-piece::before,
+    body.weather-snow .task-slip::before {
+      content: "~~~";
+      position: absolute;
+      top: -9px;
+      left: 4px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink);
+      letter-spacing: -1px;
+    }
+
+    /* Big Pieces (Atmos & Get Long Weekend) */
+    .big-piece {
+      position: absolute;
+      width: 196px;
+      background: var(--paper);
+      border: 2px solid var(--paper-border);
+      border-radius: 4px;
+      padding: 12px;
+      box-shadow: 4px 6px 0 var(--shadow);
+      pointer-events: auto;
+      transform-origin: 50% -8px;
+      transition: left 0.35s cubic-bezier(0.22, 1, 0.36, 1), top 0.25s ease, transform 0.35s ease;
+    }
+
+    .big-piece .pin-left { left: 26px; }
+    .big-piece .pin-right { right: 26px; }
+
+    .piece-tag {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Atmos Card Inner Frame */
+    .atmos-viewport {
+      height: 118px;
+      border: 1.5px solid var(--paper-border);
+      background: var(--paper-alt);
+      position: relative;
+      overflow: hidden;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .atmos-sky-orb {
+      width: 28px;
+      height: 28px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 50%;
+      background: var(--paper);
+      align-self: flex-end;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 9px;
+    }
+
+    .atmos-cloud {
+      position: absolute;
+      top: 22px;
+      left: 14px;
+      width: 54px;
+      height: 16px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 12px;
+      background: var(--paper);
+      animation: cloudDrift 6s ease-in-out infinite alternate;
+    }
+
+    @keyframes cloudDrift {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(22px); }
+    }
+
+    .atmos-temp {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .atmos-meta {
+      margin-top: 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Get Long Weekend Card */
+    .glw-bars {
+      display: flex;
+      gap: 6px;
+      margin: 6px 0 10px 0;
+    }
+
+    .glw-bar {
+      width: 14px;
+      height: 30px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 7px;
+      background: var(--paper-alt);
+    }
+
+    .glw-bar.pto {
+      background: repeating-linear-gradient(
+        45deg,
+        var(--paper-border),
+        var(--paper-border) 2px,
+        var(--paper) 2px,
+        var(--paper) 5px
+      );
+    }
+
+    .glw-bar.holiday {
+      background: var(--ink);
+    }
+
+    .glw-headline {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .glw-sub {
+      font-size: 11px;
+      color: var(--ink-muted);
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+
+    .glw-action-btn {
+      width: 100%;
+      padding: 5px 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      border: 1px dashed var(--paper-border);
+      background: var(--paper-alt);
+      color: var(--ink);
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .glw-action-btn:hover {
+      border-style: solid;
+      background: var(--bg-canvas);
+    }
+
+    /* Center Task Cluster Container */
+    .task-cluster-zone {
+      position: absolute;
+      left: 280px;
+      right: 280px;
+      top: 0;
+      height: 250px;
+      pointer-events: auto;
+    }
+
+    .cluster-hint-pill {
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+      background: var(--paper);
+      border: 1px dashed var(--ink-faint);
+      padding: 2px 8px;
+      border-radius: 99px;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Small Task Slip */
+    .task-slip {
+      position: absolute;
+      width: 116px;
+      min-height: 128px;
+      background: var(--paper);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 2px;
+      padding: 12px 10px 10px 10px;
+      box-shadow: 3px 5px 0 var(--shadow);
+      cursor: grab;
+      pointer-events: auto;
+      transform-origin: 50% -10px;
+      transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                  top 0.25s ease,
+                  transform 0.2s ease,
+                  box-shadow 0.2s ease;
+    }
+
+    .task-slip:hover {
+      z-index: 15 !important;
+      box-shadow: 5px 8px 0 var(--shadow);
+    }
+
+    .task-slip.dragging {
+      cursor: grabbing;
+      transition: none !important;
+      z-index: 30 !important;
+    }
+
+    .task-slip .clothespin {
+      left: calc(50% - 5px);
+    }
+
+    /* Perforation Tear Seam at top of slip */
+    .perforation-seam {
+      position: absolute;
+      top: 4px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      border-bottom: 1.5px dashed transparent;
+      pointer-events: none;
+    }
+
+    .task-slip.tear-warning .perforation-seam {
+      border-bottom-color: var(--ink);
+    }
+
+    .slip-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .slip-title {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.28;
+      word-break: break-word;
+    }
+
+    .slip-pull-hint {
+      margin-top: 14px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--ink-faint);
+      border-top: 1px dotted var(--bg-dot);
+      padding-top: 5px;
+    }
+
+    .task-slip.glw-reminder {
+      background: var(--paper-alt);
+      border-style: dashed;
+    }
+
+    .task-slip.onboarding-ghost {
+      border-style: dashed;
+      background: transparent;
+    }
+
+    /* Empty Clothespin left on line after tear-off */
+    .empty-pin-marker {
+      position: absolute;
+      width: 10px;
+      height: 24px;
+      background: var(--pin-fill);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 2px;
+      z-index: 6;
+      pointer-events: none;
+      transition: left 0.3s ease, top 0.25s ease;
+    }
+
+    .empty-pin-marker::after {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 1px;
+      right: 1px;
+      height: 2px;
+      background: var(--paper-border);
+    }
+
+    /* Finder Desktop Icons (Right Margin, aboveVaral) */
+    .finder-icons {
+      position: absolute;
+      top: 140px;
+      right: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      z-index: 12;
+      pointer-events: none;
+    }
+
+    .finder-icon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--ink);
+    }
+
+    .folder-glyph {
+      width: 44px;
+      height: 34px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 3px;
+      background: var(--paper-alt);
+      position: relative;
+    }
+
+    .folder-glyph::before {
+      content: "";
+      position: absolute;
+      top: -5px;
+      left: 0;
+      width: 16px;
+      height: 5px;
+      border: 1.5px solid var(--paper-border);
+      border-bottom: none;
+      background: var(--paper-alt);
+    }
+
+    /* Bottom-Right Laundry Basket (Cesto) */
+    .basket-zone {
+      position: absolute;
+      right: 28px;
+      bottom: 64px;
+      width: 148px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+      pointer-events: auto;
+    }
+
+    .basket-slips-stack {
+      display: flex;
+      gap: 4px;
+      margin-bottom: -6px;
+      z-index: 1;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 126px;
+    }
+
+    .basket-crumb {
+      width: 34px;
+      height: 22px;
+      background: var(--paper);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      padding: 2px 3px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .basket-crumb:hover {
+      transform: translateY(-8px) scale(1.08);
+      z-index: 5;
+    }
+
+    .basket- rim {
+      width: 132px;
+      height: 8px;
+      background: var(--pin-fill);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 2px;
+      z-index: 2;
+    }
+
+    .basket-body {
+      width: 132px;
+      height: 50px;
+      background: var(--paper-alt);
+      border: 1.5px solid var(--paper-border);
+      clip-path: polygon(0 0, 100% 0, 86% 100%, 14% 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+      z-index: 2;
+    }
+
+    .basket-caption {
+      margin-top: 5px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-muted);
+      text-align: center;
+    }
+
+    .basket-clear-btn {
+      margin-top: 2px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      background: transparent;
+      border: none;
+      color: var(--ink);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* Board 2 Mid-Tear Annotation Overlay */
+    .board2-annotation {
+      position: absolute;
+      top: 195px;
+      left: 50%;
+      transform: translateX(-30%);
+      width: 310px;
+      border: 1px dashed var(--paper-border);
+      background: var(--paper);
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.45;
+      z-index: 22;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Board 3 Foreground Browser Window (Occluding Desktop) */
+    .browser-window {
+      position: absolute;
+      top: 56px;
+      left: 118px;
+      width: 790px;
+      height: 520px;
+      background: var(--paper);
+      border: 2px solid var(--paper-border);
+      border-radius: 8px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      z-index: 25;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .browser-window.visible {
+      display: flex;
+    }
+
+    .browser-titlebar {
+      height: 34px;
+      background: var(--menubar-bg);
+      border-bottom: 1.5px solid var(--paper-border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+    }
+
+    .win-dot {
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 50%;
+    }
+
+    .browser-url {
+      margin-left: 12px;
+      flex: 1;
+      max-width: 420px;
+      height: 20px;
+      border: 1px solid var(--paper-border);
+      background: var(--paper);
+      border-radius: 4px;
+      padding: 0 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      color: var(--ink-muted);
+    }
+
+    .browser-body {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--ink);
+    }
+
+    .wire-line {
+      height: 10px;
+      background: var(--bg-dot);
+      border-radius: 2px;
+    }
+
+    /* Menu-Bar Popover (Door when Desktop is Covered) */
+    .menubar-popover {
+      position: absolute;
+      top: 34px;
+      right: 90px;
+      width: 280px;
+      background: var(--paper);
+      border: 2px solid var(--paper-border);
+      border-radius: 8px;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+      padding: 12px;
+      z-index: 45;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .menubar-popover.visible {
+      display: flex;
+    }
+
+    .popover-mini-line {
+      height: 52px;
+      border: 1px dashed var(--paper-border);
+      background: var(--paper-alt);
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+
+    .quick-add-form {
+      display: flex;
+      gap: 6px;
+    }
+
+    .quick-add-input {
+      flex: 1;
+      padding: 5px 7px;
+      border: 1.5px solid var(--paper-border);
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .quick-add-btn {
+      padding: 5px 9px;
+      border: 1.5px solid var(--paper-border);
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .popover-task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+
+    .popover-task-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px;
+      border: 1px solid var(--bg-dot);
+      font-size: 11px;
+      background: var(--paper-alt);
+    }
+
+    .popover-tear-btn {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      border: 1px solid var(--paper-border);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 1px 5px;
+    }
+
+    /* macOS Dock */
+    .mac-dock {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 44px;
+      padding: 0 12px;
+      background: var(--dock-bg);
+      border: 1.5px solid var(--paper-border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 30;
+    }
+
+    .dock-icon {
+      width: 28px;
+      height: 28px;
+      border: 1.5px solid var(--paper-border);
+      border-radius: 6px;
+      background: var(--paper);
+    }
+
+    /* Annotation Footer Panel */
+    .annotation-card {
+      width: 100%;
+      max-width: 1240px;
+      background: #1c1c1a;
+      color: #e4e4de;
+      border: 1px solid #3a3a36;
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .annotation-col h4 {
+      margin: 0 0 6px 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #a8a8a0;
+      letter-spacing: 0.05em;
+    }
+
+    .annotation-col p {
+      margin: 0;
+      color: #d6d6d0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Wireframe Switcher & Physics Controls -->
+  <div class="wireframe-toolbar">
+    <div class="board-tabs">
+      <button class="board-btn active" onclick="setBoard(1)">1. Morning Desktop</button>
+      <button class="board-btn" onclick="setBoard(2)">2. Tear-Off Mid-Action</button>
+      <button class="board-btn" onclick="setBoard(3)">3. Browser Occluded + Popover</button>
+      <button class="board-btn" onclick="setBoard(4)">4. Night State</button>
+      <button class="board-btn" onclick="setBoard(5)">5. End of Day</button>
+      <button class="board-btn" onclick="setBoard(6)">6. First-Run & GLW States</button>
+    </div>
+    <div class="env-controls">
+      <span>Atmos Weather:</span>
+      <button class="env-btn active" id="wx-breeze" onclick="setWeather('breeze')">Breeze</button>
+      <button class="env-btn" id="wx-rain" onclick="setWeather('rain')">Rain (+Sag)</button>
+      <button class="env-btn" id="wx-snow" onclick="setWeather('snow')">Snow</button>
+      <button class="env-btn" id="glw-toggle" onclick="toggleGLWState()">GLW: Configured</button>
+    </div>
+  </div>
+
+  <!-- macOS Desktop Screen Viewport -->
+  <div class="mac-screen" id="macScreen">
+
+    <!-- macOS Menu Bar -->
+    <div class="mac-menubar">
+      <div class="menubar-left">
+        <span class="menubar-item bold">&#63743;</span>
+        <span class="menubar-item bold" id="activeAppTitle">Finder</span>
+        <span class="menubar-item">File</span>
+        <span class="menubar-item">Edit</span>
+        <span class="menubar-item">View</span>
+        <span class="menubar-item">Window</span>
+      </div>
+      <div class="menubar-right">
+        <div class="varal-status-pill" onclick="togglePopover()" title="Click to toggle Varal Menu-Bar Popover">
+          <span id="menubarPinGlyph">&#8886; 4</span>
+        </div>
+        <span id="menubarClock">Mon 16 Nov  09:42</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <!-- Nocturnal Ambient Layer (Visible in Board 4 / Night State) -->
+    <div class="nocturnal-layer">
+      <span class="star" style="top: 18px; left: 8%;">*</span>
+      <span class="star" style="top: 42px; left: 28%;">.</span>
+      <span class="star" style="top: 14px; left: 64%;">*</span>
+      <span class="star" style="top: 36px; left: 86%;">+</span>
+      <div class="satellite-track">
+        <div class="satellite-dot">[sat 0.4°/s]</div>
+      </div>
+      <div class="firefly" style="bottom: 110px; left: 18%;"></div>
+      <div class="firefly" style="bottom: 150px; right: 24%; animation-delay: 1.5s;"></div>
+      <div class="firefly" style="bottom: 95px; right: 16%; animation-delay: 2.8s;"></div>
+    </div>
+
+    <!-- Weather Spill Layer (Rain / Snow driven by Atmos) -->
+    <div class="weather-spill-layer" id="weatherSpillLayer"></div>
+
+    <!-- SVG Clothesline Layer -->
+    <svg class="clothesline-svg" id="clotheslineSvg" viewBox="0 0 1240 160" preserveAspectRatio="none">
+      <line class="rope-baseline-ref" x1="0" y1="16" x2="1240" y2="16" />
+      <path class="rope-path" id="ropePath" d="M 0,16 Q 620,52 1240,16" />
+    </svg>
+
+    <!-- Wallpaper-Level Clothesline Stage -->
+    <div class="clothesline-stage" id="clotheslineStage">
+
+      <!-- Big Piece 1: ATMOS (Left Anchor) -->
+      <div class="big-piece" id="atmosCard" style="left: 48px; top: 22px;">
+        <div class="clothespin pin-left"></div>
+        <div class="clothespin pin-right"></div>
+        <div class="piece-tag">
+          <span>ATMOS · LIVE</span>
+          <span id="atmosWindBadge">12 km/h E</span>
+        </div>
+        <div class="atmos-viewport">
+          <div class="atmos-cloud"></div>
+          <div class="atmos-sky-orb" id="atmosOrb">SUN</div>
+          <div class="atmos-temp" id="atmosTemp">18°C</div>
+        </div>
+        <div class="atmos-meta">
+          <span>atmos.reggiespace.ca</span>
+          <span id="atmosCondLabel">Clear Breeze</span>
+        </div>
+      </div>
+
+      <!-- Center Task Cluster Zone (Hover expands & pushes big cards outward) -->
+      <div class="task-cluster-zone" id="taskClusterZone"
+           onmouseenter="onClusterHover(true)"
+           onmouseleave="onClusterHover(false)">
+        <div class="cluster-hint-pill" id="clusterHintPill">
+          Hover cluster to fan out slips · Drag any slip down (&gt;48px) to tear off
+        </div>
+        <div id="slipsContainer"></div>
+        <div id="emptyPinsContainer"></div>
+      </div>
+
+      <!-- Big Piece 2: GET LONG WEEKEND (Right Anchor) -->
+      <div class="big-piece" id="glwCard" style="left: 970px; top: 22px;">
+        <div class="clothespin pin-left"></div>
+        <div class="clothespin pin-right"></div>
+        <div class="piece-tag">
+          <span>GET LONG WEEKEND</span>
+          <span id="glwStateTag">SYNCED</span>
+        </div>
+        <div class="glw-bars">
+          <div class="glw-bar holiday" title="Holiday"></div>
+          <div class="glw-bar pto" title="PTO Bridge Day"></div>
+          <div class="glw-bar" title="Saturday"></div>
+          <div class="glw-bar" title="Sunday"></div>
+        </div>
+        <div class="glw-headline" id="glwHeadline">Feriadão em 12 dias</div>
+        <div class="glw-sub" id="glwSub">
+          4 days off (Jun 4–7). 1 PTO day selected. No notifications—passive reminder slip pinned.
+        </div>
+        <button class="glw-action-btn" id="glwActionBtn" onclick="pinGLWReminderSlip()">
+          + Pin PTO Reminder Slip
+        </button>
+      </div>
+
+      <!-- Board 2 Kinematic Callout Box -->
+      <div class="board2-annotation" id="board2Annotation">
+        <strong>MID-TEAR KINEMATICS (Δy &gt; 48pt):</strong><br/>
+        1. Serrated perforation unzips below clothespin.<br/>
+        2. Empty pin remains on line; rope rebounds upward (-4.5pt sag).<br/>
+        3. Slip flutters along wind-biased sine path into bottom-right cesto.
+      </div>
+
+    </div>
+
+    <!-- Finder Desktop Icons (Demonstrates Varal sits BEHIND Finder icons) -->
+    <div class="finder-icons">
+      <div class="finder-icon">
+        <div class="folder-glyph"></div>
+        <span>Projetos</span>
+      </div>
+      <div class="finder-icon">
+        <div class="folder-glyph"></div>
+        <span>Capturas</span>
+      </div>
+    </div>
+
+    <!-- Bottom-Right Laundry Basket (Cesto) -->
+    <div class="basket-zone" id="basketZone">
+      <div class="basket-slips-stack" id="basketStack"></div>
+      <div class="basket-rim"></div>
+      <div class="basket-body" id="basketBody">cesto: 0 feitas</div>
+      <div class="basket-caption" id="basketCaption">Drag down to tear · Click slip in basket to undo</div>
+      <button class="basket-clear-btn" id="basketClearBtn" style="display:none;" onclick="clearBasket()">
+        [Limpar cesto]
+      </button>
+    </div>
+
+    <!-- Foreground Browser Window (Visible on Board 3 to show Desktop Occlusion) -->
+    <div class="browser-window" id="browserWindow">
+      <div class="browser-titlebar">
+        <div class="win-dot"></div>
+        <div class="win-dot"></div>
+        <div class="win-dot"></div>
+        <div class="browser-url">https://getlongweekend.ca/plan — Foreground App Window</div>
+      </div>
+      <div class="browser-body">
+        <h3 style="margin:0; font-family:var(--font-mono); font-size:14px;">
+          FOREGROUND APP WINDOW (COVERS DESKTOP CLOTHESLINE)
+        </h3>
+        <p style="margin:0; font-size:12px; color:var(--ink-muted);">
+          Varal lives strictly at desktop/wallpaper level (<code>CGWindowLevelForKey(.desktopIconWindow) - 1</code>).
+          Standard macOS windows always pass in front of the clothesline. When covered, the menu-bar icon
+          opens the Mini Clothesline Popover (top right).
+        </p>
+        <div class="wire-line" style="width: 85%;"></div>
+        <div class="wire-line" style="width: 72%;"></div>
+        <div class="wire-line" style="width: 90%;"></div>
+        <div style="border:1.5px dashed var(--paper-border); padding:18px; margin-top:8px; font-family:var(--font-mono); font-size:11px;">
+          [Occlusion Governor Active]: Desktop physics loop paused at 0fps while &gt;85% occluded by this window.
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu-Bar Popover (Open on Board 3 or when clicking the Menu-Bar Icon) -->
+    <div class="menubar-popover" id="menubarPopover">
+      <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10px; font-weight:700;">
+        <span>VARAL · MINI LINE</span>
+        <span id="popoverStats">18°C · 12d to break</span>
+      </div>
+      <div class="popover-mini-line">
+        <span id="popoverAsciiLine">~~~[=ATMOS=]~~~[⊶]~[⊶]~[⊶]~~~[=GLW=]~~~</span>
+        <span style="color:var(--ink-muted);" id="popoverSagReadout">Line Sag: Δy 32pt · Breeze: Active</span>
+      </div>
+      <form class="quick-add-form" onsubmit="handleQuickAdd(event)">
+        <input class="quick-add-input" id="quickAddInput" type="text" placeholder="17:00 Pin new task..." />
+        <button class="quick-add-btn" type="submit">+ Pin</button>
+      </form>
+      <div class="popover-task-list" id="popoverTaskList"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--bg-dot); padding-top:6px; font-family:var(--font-mono); font-size:10px;">
+        <button class="popover-tear-btn" onclick="toggleBreezePause()" id="pauseBreezeBtn">Pause Breeze</button>
+        <span id="popoverBasketCount">Basket: 0</span>
+      </div>
+    </div>
+
+    <!-- macOS Dock -->
+    <div class="mac-dock">
+      <div class="dock-icon"></div>
+      <div class="dock-icon"></div>
+      <div class="dock-icon"></div>
+      <div class="dock-icon"></div>
+      <div class="dock-icon"></div>
+      <div class="dock-icon"></div>
+    </div>
+
+  </div>
+
+  <!-- Structured Board Annotation Readout -->
+  <div class="annotation-card">
+    <div class="annotation-col">
+      <h4>Board Hierarchy &amp; Layout</h4>
+      <p id="annotHierarchy"></p>
+    </div>
+    <div class="annotation-col">
+      <h4>What Moves &amp; Why (Physics)</h4>
+      <p id="annotMotion"></p>
+    </div>
+    <div class="annotation-col">
+      <h4>Gestures &amp; State Transitions</h4>
+      <p id="annotGestures"></p>
+    </div>
+  </div>
+
+  <script>
+    const INITIAL_TASKS = [
+      { id: 't1', time: '09:30', title: 'Standup & sprint notes', completed: false },
+      { id: 't2', time: '11:00', title: 'Send Q4 architecture brief', completed: false },
+      { id: 't3', time: '15:00', title: 'Dentista consulta', completed: false },
+      { id: 't4', time: '17:15', title: 'Buscar o Vin na escola', completed: false }
+    ];
+
+    const BOARD_NOTES = {
+      1: {
+        hierarchy: "Board 1 (Morning Desktop): Edge-to-edge catenary line below menu bar. Atmos (left, 2 pins) and Get Long Weekend (right, 2 pins) frame the shingled center cluster of 4 task slips. Finder icons and Dock remain unobstructed.",
+        motion: "Atmos drives a shared 12 km/h breeze across all pieces. Single-pin task slips sway at ±3.2°; two-pin big cards sway at ±1.2°. Total hanging mass creates a 34pt catenary sag in the center of the line.",
+        gestures: "Hover over the center task cluster to fan the slips apart (pushing Atmos and Get Long Weekend toward the screen edges). Drag any task slip downward >48px to tear it off into the bottom-right basket."
+      },
+      2: {
+        hierarchy: "Board 2 (Tear-Off Gesture Mid-Action): Highlights the physical completion moment. Task slip '11:00 Send Q4 architecture brief' is half-detached below its serrated perforation line, falling toward the basket while its empty pin remains on the rope.",
+        motion: "Three-phase kinematics: 0-18pt elastic rope stretch -> 18-48pt perforation unzip -> >48pt snap! Removing the slip's weight causes the clothesline to recoil upward (-4.5pt sag) while the slip flutters down along the wind vector.",
+        gestures: "Drag downward past 48pt and release to complete. To undo, click or drag any folded slip inside the bottom-right laundry basket ('cesto') to re-pin it back onto its empty clothespin."
+      },
+      3: {
+        hierarchy: "Board 3 (Desktop Covered by Browser + Menu-Bar Popover): A foreground browser window covers 80% of the desktop. Varal stays strictly behind the window at wallpaper level. The left margin of Atmos and the bottom-right basket peek out.",
+        motion: "Occlusion Governor pauses the desktop 60fps loop while covered. Clicking the menu-bar icon [⊶] opens the popover with a live Mini Clothesline mirror.",
+        gestures: "Use the open Menu-Bar Popover (top right) to type and pin a new task slip with a bounce, tear off tasks directly from the popover list, or click 'Pause Breeze'."
+      },
+      4: {
+        hierarchy: "Board 4 (Night State): Inverted low-luminance charcoal wireframe palette (#171716) so paper slips never glare in a dark room. Atmos displays waxing moon, stars, and 9°C calm night air.",
+        motion: "Wind slows to a calm 3 km/h meditative sway. Nocturnal sky elements spill into the yard: a satellite traverses a dashed orbital path near the line, and halftone fireflies drift near the laundry basket.",
+        gestures: "All tear-off and basket undo interactions remain identical, with zero notifications or midnight interruptions."
+      },
+      5: {
+        hierarchy: "Board 5 (End of Day — Empty Line, Full Basket): All 4 daily task slips have been torn off into the bottom-right basket. Only the 4 empty clothespins and the two companion cards remain on the taut line.",
+        motion: "With all task weight removed from the line, catenary sag rises to a taut 16pt. Empty clothespins tremble lightly in the breeze.",
+        gestures: "Calm 'Dia concluído · 4 feitas' caption appears beneath the full basket with a '[Limpar cesto]' action. Clicking any slip in the basket still undoes completion."
+      },
+      6: {
+        hierarchy: "Board 6 (First-Run Empty State & Get Long Weekend Discovery State): Bare line with one dashed instructional slip ('Pull down to tear off your first task') and Get Long Weekend in State A (Pre-Selection Discovery).",
+        motion: "Minimal initial line sag (14pt). Pinning the first task drops a clothespin onto the rope with a spring bounce.",
+        gestures: "Click 'GLW: Pre-Selection' in the top bar (or the button on the Get Long Weekend card) to test transitioning from the Discovery prompt (getlongweekend.ca) to the Personal Countdown + passive PTO reminder slip."
+      }
+    };
+
+    let state = {
+      board: 1,
+      tasks: JSON.parse(JSON.stringify(INITIAL_TASKS)),
+      clusterExpanded: false,
+      weather: 'breeze', // 'breeze' | 'rain' | 'snow'
+      breezePaused: false,
+      glwConfigured: true,
+      swayPhase: 0,
+      midTearDemoSlipId: null
+    };
+
+    function getRopeYAtX(x, maxSag) {
+      const w = 1240;
+      const t = x / w;
+      return 16 + 4 * maxSag * t * (1 - t);
+    }
+
+    function computeCurrentSag() {
+      const activeCount = state.tasks.filter(t => !t.completed).length;
+      const moistureBonus = state.weather === 'rain' ? 8 : (state.weather === 'snow' ? 5 : 0);
+      return Math.min(54, 8 + 12 + activeCount * 4.5 + moistureBonus);
+    }
+
+    function renderAll() {
+      const sag = computeCurrentSag();
+      const ropePath = document.getElementById('ropePath');
+      ropePath.setAttribute('d', `M 0,16 Q 620,${16 + sag * 1.85} 1240,16`);
+
+      // Position Big Cards along Catenary Curve & Cluster Expansion Offset
+      const atmosCard = document.getElementById('atmosCard');
+      const glwCard = document.getElementById('glwCard');
+      const activeTasks = state.tasks.filter(t => !t.completed);
+      const shouldPushEdges = state.clusterExpanded && activeTasks.length >= 3;
+
+      const atmosX = shouldPushEdges ? 18 : 54;
+      const glwX = shouldPushEdges ? 1022 : 982;
+      atmosCard.style.left = `${atmosX}px`;
+      atmosCard.style.top = `${getRopeYAtX(atmosX + 98, sag)}px`;
+
+      glwCard.style.left = `${glwX}px`;
+      glwCard.style.top = `${getRopeYAtX(glwX + 98, sag)}px`;
+
+      // Update GLW Two-State Content (Pre-Selection Discovery vs Post-Selection Countdown)
+      const glwStateTag = document.getElementById('glwStateTag');
+      const glwHeadline = document.getElementById('glwHeadline');
+      const glwSub = document.getElementById('glwSub');
+      const glwActionBtn = document.getElementById('glwActionBtn');
+      const glwToggleBtn = document.getElementById('glw-toggle');
+
+      if (state.glwConfigured) {
+        glwStateTag.textContent = 'STATE B · PLAN';
+        glwHeadline.textContent = 'Feriadão em 12 dias';
+        glwSub.textContent = 'Next block: Jun 4–7 (Block 1 of 2 via varal://weekend?start=...&end=...&plan=...). Re-hang updates idempotently.';
+        glwActionBtn.textContent = '+ Pin Block Reminder Slip';
+        glwToggleBtn.textContent = 'GLW: State B (Countdown)';
+      } else {
+        glwStateTag.textContent = 'STATE A · DISCOVERY';
+        glwHeadline.textContent = 'Bridge Opportunity';
+        glwSub.textContent = 'Turn 1 PTO day into 4 days off next month. Calm, removable product card for getlongweekend.ca.';
+        glwActionBtn.textContent = 'Hang on Varal (varal://weekend)';
+        glwToggleBtn.textContent = 'GLW: State A (Discovery)';
+      }
+
+      // Render Active Task Slips & Empty Clothespins
+      const slipsContainer = document.getElementById('slipsContainer');
+      const emptyPinsContainer = document.getElementById('emptyPinsContainer');
+      slipsContainer.innerHTML = '';
+      emptyPinsContainer.innerHTML = '';
+
+      const zoneWidth = 680;
+      const count = activeTasks.length;
+      const spacing = state.clusterExpanded
+        ? Math.min(132, Math.floor((zoneWidth - 116) / Math.max(1, count - 1)))
+        : Math.min(72, Math.floor((zoneWidth - 116) / Math.max(1, count - 1)));
+
+      const totalClusterWidth = count > 0 ? 116 + (count - 1) * spacing : 0;
+      const startX = Math.max(10, Math.floor((zoneWidth - totalClusterWidth) / 2));
+
+      activeTasks.forEach((task, idx) => {
+        const slipX = startX + idx * spacing;
+        const globalX = 280 + slipX + 58;
+        const ropeY = getRopeYAtX(globalX, sag);
+
+        const slip = document.createElement('div');
+        slip.className = 'task-slip' +
+          (task.isGLW ? ' glw-reminder' : '') +
+          (task.isGhost ? ' onboarding-ghost' : '');
+        slip.style.left = `${slipX}px`;
+        slip.style.top = `${ropeY}px`;
+        slip.style.zIndex = String(8 + idx);
+        slip.dataset.id = task.id;
+
+        // Board 2 Mid-Tear visual demonstration state
+        if (state.board === 2 && idx === 1) {
+          slip.style.top = `${ropeY + 78}px`;
+          slip.style.transform = `rotate(-11deg)`;
+          slip.classList.add('tear-warning');
+
+          const emptyPin = document.createElement('div');
+          emptyPin.className = 'empty-pin-marker';
+          emptyPin.style.left = `${slipX + 53}px`;
+          emptyPin.style.top = `${ropeY - 14}px`;
+          emptyPinsContainer.appendChild(emptyPin);
+        }
+
+        slip.innerHTML = `
+          <div class="clothespin" style="${state.board === 2 && idx === 1 ? 'display:none;' : ''}"></div>
+          <div class="perforation-seam"></div>
+          <div class="slip-time">
+            <span>${task.time}</span>
+            <span>${task.isGLW ? '[GLW]' : '#' + (idx + 1)}</span>
+          </div>
+          <div class="slip-title">${task.title}</div>
+          <div class="slip-pull-hint">&darr; Pull down to tear</div>
+        `;
+
+        attachDragToTear(slip, task.id, ropeY);
+        slipsContainer.appendChild(slip);
+      });
+
+      // Render Empty Clothespins for Completed Slips (especially visible on Board 5)
+      const completedTasks = state.tasks.filter(t => t.completed);
+      completedTasks.forEach((cTask, cIdx) => {
+        const pinX = 190 + cIdx * 78;
+        const globalX = 280 + pinX;
+        const ropeY = getRopeYAtX(globalX, sag);
+        const emptyPin = document.createElement('div');
+        emptyPin.className = 'empty-pin-marker';
+        emptyPin.style.left = `${pinX}px`;
+        emptyPin.style.top = `${ropeY - 12}px`;
+        emptyPinsContainer.appendChild(emptyPin);
+      });
+
+      // Render Bottom-Right Basket ("cesto")
+      const basketStack = document.getElementById('basketStack');
+      const basketBody = document.getElementById('basketBody');
+      const basketCaption = document.getElementById('basketCaption');
+      const basketClearBtn = document.getElementById('basketClearBtn');
+      basketStack.innerHTML = '';
+
+      completedTasks.forEach(task => {
+        const crumb = document.createElement('div');
+        crumb.className = 'basket-crumb';
+        crumb.title = `Click to Undo and re-pin "${task.title}" onto the line`;
+        crumb.textContent = task.title;
+        crumb.onclick = () => undoTaskFromBasket(task.id);
+        basketStack.appendChild(crumb);
+      });
+
+      basketBody.textContent = `cesto: ${completedTasks.length} feita${completedTasks.length === 1 ? '' : 's'}`;
+      if (activeTasks.length === 0 && completedTasks.length > 0) {
+        basketCaption.innerHTML = `<strong>Dia concluído</strong> · ${completedTasks.length} feitas`;
+        basketClearBtn.style.display = 'inline-block';
+      } else {
+        basketCaption.textContent = completedTasks.length > 0
+          ? 'Click any slip in basket to undo & re-pin'
+          : 'Drag any slip down (>48pt) to tear into basket';
+        basketClearBtn.style.display = 'none';
+      }
+
+      // Update Menu-Bar Glyph & Popover Mirror
+      document.getElementById('menubarPinGlyph').textContent = `⊶ ${activeTasks.length}`;
+      document.getElementById('popoverBasketCount').textContent = `Basket: ${completedTasks.length}`;
+      document.getElementById('popoverSagReadout').textContent =
+        `Line Sag: Δy ${Math.round(sag)}pt · Breeze: ${state.breezePaused ? 'Paused' : 'Active'}`;
+
+      const miniPins = activeTasks.map(() => '[⊶]').join('~') || '~~~~';
+      document.getElementById('popoverAsciiLine').textContent = `~~[ATMOS]~~${miniPins}~~[GLW]~~`;
+
+      const popoverList = document.getElementById('popoverTaskList');
+      popoverList.innerHTML = '';
+      activeTasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = 'popover-task-item';
+        item.innerHTML = `
+          <span><strong>${task.time}</strong> ${task.title}</span>
+          <button class="popover-tear-btn" onclick="completeTask('${task.id}')">&darr; Tear</button>
+        `;
+        popoverList.appendChild(item);
+      });
+
+      // Update Board Annotations
+      const notes = BOARD_NOTES[state.board];
+      document.getElementById('annotHierarchy').textContent = notes.hierarchy;
+      document.getElementById('annotMotion').textContent = notes.motion;
+      document.getElementById('annotGestures').textContent = notes.gestures;
+    }
+
+    function attachDragToTear(slipEl, taskId, baseTop) {
+      let startY = 0;
+      let currentDY = 0;
+      let dragging = false;
+
+      const onPointerDown = (e) => {
+        dragging = true;
+        startY = e.clientY;
+        currentDY = 0;
+        slipEl.classList.add('dragging');
+        slipEl.setPointerCapture(e.pointerId);
+      };
+
+      const onPointerMove = (e) => {
+        if (!dragging) return;
+        currentDY = Math.max(-10, e.clientY - startY);
+        slipEl.style.top = `${baseTop + currentDY}px`;
+
+        // Local elastic rope stretch while pulling
+        const baseSag = computeCurrentSag();
+        const extraPull = Math.min(28, currentDY * 0.45);
+        document.getElementById('ropePath').setAttribute(
+          'd',
+          `M 0,16 Q 620,${16 + (baseSag + extraPull) * 1.85} 1240,16`
+        );
+
+        if (currentDY > 18) {
+          slipEl.classList.add('tear-warning');
+          slipEl.style.transform = `rotate(${Math.min(14, (currentDY - 18) * 0.35)}deg)`;
+        } else {
+          slipEl.classList.remove('tear-warning');
+          slipEl.style.transform = 'rotate(0deg)';
+        }
+      };
+
+      const onPointerUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        slipEl.classList.remove('dragging');
+
+        if (currentDY > 48) {
+          // Animate flutter toward bottom-right basket
+          slipEl.style.transition = 'top 0.55s ease-in, left 0.55s ease-out, transform 0.55s ease, opacity 0.55s ease';
+          slipEl.style.left = '640px';
+          slipEl.style.top = '480px';
+          slipEl.style.transform = 'rotate(28deg) scale(0.45)';
+          slipEl.style.opacity = '0.2';
+          setTimeout(() => completeTask(taskId), 520);
+        } else {
+          renderAll();
+        }
+      };
+
+      slipEl.addEventListener('pointerdown', onPointerDown);
+      slipEl.addEventListener('pointermove', onPointerMove);
+      slipEl.addEventListener('pointerup', onPointerUp);
+    }
+
+    function completeTask(taskId) {
+      const target = state.tasks.find(t => t.id === taskId);
+      if (target) {
+        target.completed = true;
+      }
+      renderAll();
+    }
+
+    function undoTaskFromBasket(taskId) {
+      const target = state.tasks.find(t => t.id === taskId);
+      if (target) {
+        target.completed = false;
+      }
+      renderAll();
+    }
+
+    function clearBasket() {
+      state.tasks = state.tasks.filter(t => !t.completed);
+      renderAll();
+    }
+
+    function onClusterHover(expanded) {
+      state.clusterExpanded = expanded;
+      renderAll();
+    }
+
+    function setBoard(boardNum) {
+      state.board = boardNum;
+      document.querySelectorAll('.board-btn').forEach((btn, idx) => {
+        btn.classList.toggle('active', idx + 1 === boardNum);
+      });
+
+      document.body.classList.toggle('night-mode', boardNum === 4);
+      document.getElementById('browserWindow').classList.toggle('visible', boardNum === 3);
+      document.getElementById('menubarPopover').classList.toggle('visible', boardNum === 3);
+      document.getElementById('board2Annotation').style.display = boardNum === 2 ? 'block' : 'none';
+      document.getElementById('activeAppTitle').textContent = boardNum === 3 ? 'Safari' : 'Finder';
+
+      // Set Atmos time-of-day label
+      if (boardNum === 4) {
+        document.getElementById('atmosOrb').textContent = 'MOON';
+        document.getElementById('atmosTemp').textContent = '9°C';
+        document.getElementById('atmosWindBadge').textContent = '3 km/h E';
+        document.getElementById('menubarClock').textContent = 'Mon 16 Nov  22:45';
+      } else {
+        document.getElementById('atmosOrb').textContent = 'SUN';
+        document.getElementById('atmosTemp').textContent = '18°C';
+        document.getElementById('atmosWindBadge').textContent = '12 km/h E';
+        document.getElementById('menubarClock').textContent = 'Mon 16 Nov  09:42';
+      }
+
+      // Configure canonical board task states
+      if (boardNum === 1 || boardNum === 2 || boardNum === 3 || boardNum === 4) {
+        state.tasks = JSON.parse(JSON.stringify(INITIAL_TASKS));
+        if (boardNum === 2 || boardNum === 3) {
+          state.tasks[0].completed = true; // 1 already in basket
+        }
+        state.glwConfigured = true;
+      } else if (boardNum === 5) {
+        state.tasks = JSON.parse(JSON.stringify(INITIAL_TASKS)).map(t => ({ ...t, completed: true }));
+        state.glwConfigured = true;
+      } else if (boardNum === 6) {
+        state.tasks = [
+          {
+            id: 'onboarding-1',
+            time: 'FIRST SLIP',
+            title: 'Pin your first task — pull down to tear off',
+            completed: false,
+            isGhost: true
+          }
+        ];
+        state.glwConfigured = false;
+      }
+
+      renderAll();
+    }
+
+    function setWeather(wx) {
+      state.weather = wx;
+      document.getElementById('wx-breeze').classList.toggle('active', wx === 'breeze');
+      document.getElementById('wx-rain').classList.toggle('active', wx === 'rain');
+      document.getElementById('wx-snow').classList.toggle('active', wx === 'snow');
+      document.body.classList.toggle('weather-snow', wx === 'snow');
+
+      const spill = document.getElementById('weatherSpillLayer');
+      spill.innerHTML = '';
+      const condLabel = document.getElementById('atmosCondLabel');
+
+      if (wx === 'rain') {
+        condLabel.textContent = 'Rain · Line +9pt sag';
+        for (let i = 0; i < 18; i++) {
+          const drop = document.createElement('span');
+          drop.className = 'precip-particle';
+          drop.textContent = '/';
+          drop.style.left = `${6 + (i * 5.2)}%`;
+          drop.style.animationDelay = `${(i % 5) * 0.4}s`;
+          spill.appendChild(drop);
+        }
+      } else if (wx === 'snow') {
+        condLabel.textContent = 'Snow · Settling on pins';
+        for (let i = 0; i < 16; i++) {
+          const flake = document.createElement('span');
+          flake.className = 'precip-particle';
+          flake.textContent = '*';
+          flake.style.left = `${8 + (i * 5.5)}%`;
+          flake.style.animationDuration = '4.2s';
+          flake.style.animationDelay = `${(i % 6) * 0.5}s`;
+          spill.appendChild(flake);
+        }
+      } else {
+        condLabel.textContent = 'Clear Breeze';
+      }
+
+      renderAll();
+    }
+
+    function toggleGLWState() {
+      state.glwConfigured = !state.glwConfigured;
+      renderAll();
+    }
+
+    function pinGLWReminderSlip() {
+      if (!state.glwConfigured) {
+        // Transition from Pre-Selection Discovery to Post-Selection Countdown
+        state.glwConfigured = true;
+        renderAll();
+        return;
+      }
+      const existing = state.tasks.find(t => t.id === 'glw-pto');
+      if (!existing) {
+        state.tasks.push({
+          id: 'glw-pto',
+          time: 'T-7d',
+          title: 'Feriadão (2026-06-04 – 2026-06-07) — confirmar folga',
+          completed: false,
+          isGLW: true
+        });
+        renderAll();
+      }
+    }
+
+    function togglePopover() {
+      const pop = document.getElementById('menubarPopover');
+      pop.classList.toggle('visible');
+    }
+
+    function handleQuickAdd(e) {
+      e.preventDefault();
+      const input = document.getElementById('quickAddInput');
+      const raw = input.value.trim();
+      if (!raw) return;
+      const match = raw.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+      const now = new Date();
+      const fallbackHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+      const time = match ? match[1] : fallbackHHMM;
+      const title = match ? match[2] : raw;
+      state.tasks.push({
+        id: 'task-' + Date.now(),
+        time,
+        title,
+        completed: false
+      });
+      input.value = '';
+      renderAll();
+    }
+
+    function toggleBreezePause() {
+      state.breezePaused = !state.breezePaused;
+      document.getElementById('pauseBreezeBtn').textContent =
+        state.breezePaused ? 'Resume Breeze' : 'Pause Breeze';
+      renderAll();
+    }
+
+    // Shared Ambient Breeze Sway Loop (Driven by Atmos Wind)
+    setInterval(() => {
+      if (state.breezePaused) return;
+      // Pause desktop sway when Board 3 Browser Window occludes desktop
+      if (state.board === 3) return;
+
+      state.swayPhase += 0.08;
+      const windAmp = state.board === 4 ? 0.8 : (state.weather === 'rain' ? 2.6 : 1.8);
+      const bigAngle = Math.sin(state.swayPhase) * (windAmp * 0.55);
+
+      const atmosCard = document.getElementById('atmosCard');
+      const glwCard = document.getElementById('glwCard');
+      if (atmosCard) atmosCard.style.transform = `rotate(${bigAngle.toFixed(2)}deg)`;
+      if (glwCard) glwCard.style.transform = `rotate(${(bigAngle * 0.9).toFixed(2)}deg)`;
+
+      document.querySelectorAll('.task-slip:not(.dragging)').forEach((el, idx) => {
+        if (state.board === 2 && idx === 1) return;
+        const slipAngle = Math.sin(state.swayPhase + idx * 0.7) * windAmp;
+        el.style.transform = `rotate(${slipAngle.toFixed(2)}deg)`;
+      });
+    }, 60);
+
+    // Initialize Board 1
+    setBoard(1);
+  </script>
+</body>
+</html>
