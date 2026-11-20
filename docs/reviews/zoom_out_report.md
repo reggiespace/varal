@@ -1,6 +1,6 @@
 # Stage 5: Initial Zoom Out & Inventive Catalyst Review Report
 
-* **Target Document:** [docs/designs/varal.md](./docs/designs/varal.md) (`1..389`, full file)
+* **Target Document:** [docs/designs/varal.md](../designs/varal.md) (`1..389`, full file)
 * **Reviewers:** `egm-zoom-out`, `egm-inventive-catalyst`
 * **Date:** 2026-11-18
 

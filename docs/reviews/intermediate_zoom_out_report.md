@@ -1,15 +1,15 @@
 # Stage 8: Intermediate Zoom Out Review (`egm-zoom-out`)
 
-* **Target Document:** [docs/designs/varal.md](./docs/designs/varal.md) (`1..401`, full file)
+* **Target Document:** [docs/designs/varal.md](../designs/varal.md) (`1..401`, full file)
 * **Prior Report Context:** [zoom_out_report.md](./zoom_out_report.md)
-* **Companion Artifacts Audited:** [concepts_brief.md](./concepts_brief.md), [wireframe_spec.md](./wireframe_spec.md), [wireframe.html](./wireframe.html)
+* **Companion Artifacts Audited:** [concepts_brief.md](../product/concepts_brief.md), [wireframe_spec.md](../designs/wireframe_spec.md), [wireframe.html](../designs/wireframe.html)
 * **Date:** 2026-11-18
 
 ---
 
 ## 1. Stage 5 Findings Verification (`ZO-1` through `ZO-4`)
 
-All four Stage 5 Zoom Out findings were resolved in [docs/designs/varal.md](./docs/designs/varal.md):
+All four Stage 5 Zoom Out findings were resolved in [docs/designs/varal.md](../designs/varal.md):
 
 1. **`ZO-1` (Resolved):** Speculative `"Line 3+"` multi-rope reservation in Portrait Layout Mode was removed from `docs/designs/varal.md` (Lines 38, 96–97, 125–128, 324, 383). Portrait mode strictly models 2 parallel ropes in V1 (`Line 1` for big companion pieces, `Line 2` for small task slips).
 2. **`ZO-2` (Resolved):** Unused polling members (`updateCadence` and `refreshData() async`) were removed from the `CompanionPiece` protocol in Section 2.3.1 (Lines 155–162) and Section 4.3 (Line 353).
@@ -36,5 +36,5 @@ No Blocker or Major findings exist in `docs/designs/varal.md`. One minor cross-a
 
 ### Finding ZO-5: Residual Mentions of `ZO-1` ("Line 3+") and `ZO-2` (`updateCadence`) in Companion Docs
 * **Severity:** Nit
-* **Affected Scope:** [concepts_brief.md](./concepts_brief.md#L21-L22) (lines 21–22) and [wireframe_spec.md](./wireframe_spec.md#L11) (lines 11, 312).
+* **Affected Scope:** [concepts_brief.md](../product/concepts_brief.md#L21-L22) (lines 21–22) and [wireframe_spec.md](../designs/wireframe_spec.md#L11) (lines 11, 312).
 * **Simplicity Rationale:** While `docs/designs/varal.md` removed the speculative `"Line 3+ reserved for future piece types"` rule (`ZO-1`) and the unused `updateCadence` property (`ZO-2`), `concepts_brief.md` still mentions `"Line 3+ reserved for future piece types"` and `updateCadence`, and `wireframe_spec.md` still mentions `"further lines reserved for future piece types"` / `"Line 3+: reserved for future piece types"`. The target design document `docs/designs/varal.md` itself is already clean.
