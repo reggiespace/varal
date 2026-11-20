@@ -1,6 +1,6 @@
 # Stage 7: Critic Review Report (`FeatureRange`: Lines 1..320)
 
-* **Target Document:** [docs/designs/varal.md](./docs/designs/varal.md) (`1..320`)
+* **Target Document:** [docs/designs/varal.md](../designs/varal.md) (`1..320`)
 * **Reviewers:** `egm-design`, `egm-structural`, `egm-style`
 * **Standards Applied:** `feature-spec-standard`
 * **Date:** 2026-11-18
@@ -21,7 +21,7 @@
 
 ### Finding D-2: Unbounded Catenary Sag & Horizontal Cluster Overflow Under Weathered Accumulation
 * **Severity:** Major
-* **Affected Scope:** Section 2.4.1 & 2.4.2 (`Catenary Physics & Shingled Small-Slip Cluster`, lines 191–202) and [wireframe_spec.md](./wireframe_spec.md#L15-L16).
+* **Affected Scope:** Section 2.4.1 & 2.4.2 (`Catenary Physics & Shingled Small-Slip Cluster`, lines 191–202) and [wireframe_spec.md](../designs/wireframe_spec.md#L15-L16).
 * **Flaw:**
   1. **Unbounded Linear Sag:** The sag equation $\Delta y_{\text{sag}}(k) = 8\text{pt} + \sum p.\text{massUnits} + (4.5\text{pt} \times N_{\text{slips}}(L_k)) + W_{\text{moisture}}$ has no upper clamp. Because unfinished tasks never auto-retire at `04:00 AM` and there is no hard 5-task cap, accumulating 15–20 unfinished tasks causes $\Delta y_{\text{sag}}$ to exceed `110pt` (`control point > 200pt`), colliding with Line 2 in Portrait Mode (`y_line2 = y_line1 + 235pt`).
   2. **Expanded Cluster Horizontal Collision:** When `clusterExpanded = true`, slips fan out with `12pt` spacing (`116pt` pitch per slip). At `>= 10` slips (`1160pt`), the expanded fan exceeds the center span between leading and trailing big pieces on a 14-inch MacBook (`1512pt` width), causing cards to collide or clip off-screen.

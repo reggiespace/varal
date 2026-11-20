@@ -3,7 +3,7 @@
 * **Author:** Reginaldo dos Santos
 * **Date:** 2026-11-16
 * **Status:** Finalized
-* **Companion Artifacts:** [concepts_brief.md](../../concepts_brief.md) | [wireframe_spec.md](../../wireframe_spec.md) | [wireframe.html](../../wireframe.html)
+* **Companion Artifacts:** [concepts_brief.md](../product/concepts_brief.md) | [wireframe_spec.md](../designs/wireframe_spec.md) | [wireframe.html](../designs/wireframe.html)
 
 ---
 
@@ -289,14 +289,14 @@ isPopoverSimulationActive   = isMotionAllowed && isMenuBarPopoverShown
 
 To verify layout, spatial hierarchy, and gesture mechanics prior to production Swift/AppKit implementation, the design includes two synchronized wireframe artifacts:
 
-1. **[wireframe_spec.md](../../wireframe_spec.md):** Annotated ASCII blueprint diagrams and kinematic specifications for all 6 boards:
+1. **[wireframe_spec.md](../designs/wireframe_spec.md):** Annotated ASCII blueprint diagrams and kinematic specifications for all 6 boards:
    * **Board 1 — Morning Desktop:** Full line (`Atmos` + 4-slip shingled center cluster + `Get Long Weekend`), Finder desktop icons in front of the right rope margin, bottom-right `cesto`, and macOS Dock.
    * **Board 2 — Tear-Off Gesture Mid-Action:** Multi-phase pull vector (`0–18pt` stretch, `18–48pt` perforation unzip, `>48pt` snap + upward rope recoil + wind-biased flutter into basket + drag-back undo).
    * **Board 3 — Desktop Covered by Browser Window + Menu-Bar Popover Open:** Foreground browser covering 80% of the desktop (`0fps` desktop governor active), left edge of `Atmos` and bottom-right basket peeking in margins, and the `NSStatusItem` popover open with the Mini Clothesline mirror and quick-add input.
    * **Board 4 — Night State:** Low-glare charcoal wireframe palette (`#171716`), `Atmos` in lunar mode (`9°C`, `3 km/h` calm breeze), slow linear satellite pass along a dashed trajectory, and halftone firefly rings near the basket.
    * **Board 5 — End of Day:** All task slips torn off into the overflowing basket, empty clothespins resting on a taut line (`Δy = 14pt`), calm `"Dia concluído · 4 feitas"` caption, and `04:00 AM` rollover rule preserving any unfinished slips with weathered edges.
    * **Board 6 — First-Run / Empty State & Get Long Weekend Two-State Matrix:** Bare line with one dashed onboarding slip and side-by-side specification of Get Long Weekend **State A (Discovery Card)** vs. **State B (Multi-Block Personal Countdown)** synced idempotently via `varal://weekend?start=...&end=...&plan=...`.
-2. **[wireframe.html](../../wireframe.html):** Self-contained grayscale HTML/CSS/SVG interactive prototype implementing the 6-board state switcher, quadratic Bezier catenary sag formula, dwell-gated cluster expansion, pointer-captured downward drag-to-tear (`>48px` threshold), basket click/drag undo, weather spill toggles (`Breeze`, `Rain`, `Snow`), and `Get Long Weekend` State A / State B switching.
+2. **[wireframe.html](../designs/wireframe.html):** Self-contained grayscale HTML/CSS/SVG interactive prototype implementing the 6-board state switcher, quadratic Bezier catenary sag formula, dwell-gated cluster expansion, pointer-captured downward drag-to-tear (`>48px` threshold), basket click/drag undo, weather spill toggles (`Breeze`, `Rain`, `Snow`), and `Get Long Weekend` State A / State B switching.
 
 ---
 
@@ -331,15 +331,15 @@ To verify layout, spatial hierarchy, and gesture mechanics prior to production S
 
 ## 4. Detailed Implementation
 
-This unified implementation plan enumerates every file created or updated across both the completed Phase 1 grayscale wireframe deliverables (in the workspace root) and the Phase 2 native macOS Swift/AppKit application target (`Varal.app`), along with its concrete responsibility and rationale.
+This unified implementation plan enumerates every file created or updated across both the completed Phase 1 grayscale wireframe deliverables (in docs/) and the Phase 2 native macOS Swift/AppKit application target (`Varal.app`), along with its concrete responsibility and rationale.
 
-### 4.1 Phase 1: Wireframe & Specification Artifacts (Workspace Root)
+### 4.1 Phase 1: Wireframe & Specification Artifacts (docs/)
 
-1. **[concepts_brief.md](../../concepts_brief.md)** *(Created / Updated)*
+1. **[concepts_brief.md](../product/concepts_brief.md)** *(Created / Updated)*
    * **Rationale:** Captures the upstream 7-lens Goldfish brainstorm synthesis, the `CompanionPiece` contract, display selection and Portrait two-rope rules, the `varal://weekend?start=...&end=...&plan=...` deep-link scope boundary, and the zero-notification invariant.
-2. **[wireframe_spec.md](../../wireframe_spec.md)** *(Created / Updated)*
+2. **[wireframe_spec.md](../designs/wireframe_spec.md)** *(Created / Updated)*
    * **Rationale:** Provides the deterministic 6-board grayscale blueprint specification, spatial coordinate grid, catenary sag formula, 3-phase downward tear-off kinematics, `04:00 AM` weathered rollover rule, and resolved architecture rulings.
-3. **[wireframe.html](../../wireframe.html)** *(Created / Updated)*
+3. **[wireframe.html](../designs/wireframe.html)** *(Created / Updated)*
    * **Rationale:** Self-contained interactive grayscale HTML/CSS/SVG prototype enabling live verification of Boards 1–6, catenary sag and upward recoil, dwell-gated shingled cluster expansion, downward drag-to-tear (`>48px`), basket undo, Atmos weather spill (`Breeze`, `Rain`, `Snow`), and Get Long Weekend State A (Discovery) / State B (Countdown) transitions.
 
 ### 4.2 Phase 2: Native macOS Application Package & Configuration (`Varal/`)

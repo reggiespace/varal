@@ -1,6 +1,6 @@
 # Stage 9: Implementation Readiness Test Report (`DetailedRange`: Lines 328..401)
 
-* **Target Document:** [docs/designs/varal.md](./docs/designs/varal.md) (`328..401`)
+* **Target Document:** [docs/designs/varal.md](../designs/varal.md) (`328..401`)
 * **Reviewers:** `egm-implementation-readiness`, `egm-codebase-details`, `egm-style`
 * **Standards Applied:** `implementation-readiness-standard`
 * **Date:** 2026-11-18
@@ -39,8 +39,8 @@
 
 ### Finding IR-4: Sync Discrepancies in Workspace `wireframe.html` vs. Item 3 & Section 2 Formulas
 * **Severity:** Major
-* **Affected Scope:** Section 4.1 Item 3 (`wireframe.html`, lines 338–339) vs. actual file [wireframe.html](./wireframe.html).
-* **Readiness Gap:** Auditing the live code in `/Users/reggie/personal/projetos/varal/wireframe.html` against the updated specification in `docs/designs/varal.md` found three drifts:
+* **Affected Scope:** Section 4.1 Item 3 (`wireframe.html`, lines 338–339) vs. actual file [wireframe.html](../designs/wireframe.html).
+* **Readiness Gap:** Auditing the live code in `docs/designs/wireframe.html` against the updated specification in `docs/designs/varal.md` found three drifts:
   1. `computeCurrentSag()` (`wireframe.html` lines 872–876) computes `14 + activeCount * 5.2 + moistureBonus` (`rain = 9`) without the `54pt` ceiling clamp, instead of `Math.min(54, 8 + 12 + activeCount * 4.5 + moistureBonus)` (`rain = 8`, `snow = 5`).
   2. `handleQuickAdd()` (`wireframe.html` line 1126) defaults an omitted time prefix to `'TODAY'` instead of the current local `HH:mm` timestamp specified in Section 2.5.1 and Item 10.
   3. `pinGLWReminderSlip()` (`wireframe.html` line 1109) uses `time: 'T-12d'` instead of `'T-7d'` specified in Section 2.1, Section 2.5.2, and Item 14.

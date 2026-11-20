@@ -2,7 +2,7 @@
 
 * **Author:** Reginaldo dos Santos
 * **Date:** 2026-11-16
-* **Companion Files:** [concepts_brief.md](file:///Users/reggie/personal/projetos/varal/concepts_brief.md) | [wireframe.html](file:///Users/reggie/personal/projetos/varal/wireframe.html)
+* **Companion Files:** [concepts_brief.md](../product/concepts_brief.md) | [wireframe.html](./wireframe.html)
 
 ---
 
