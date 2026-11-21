@@ -42,7 +42,7 @@ public enum URLSchemeRouter {
         guard !starts.isEmpty, starts.count == ends.count else { return nil }
         var blocks: [VacationBlock] = []
         for (s, e) in zip(starts, ends) {
-            guard isValidISODate(s), isValidISODate(e), s <= e else { continue }
+            guard isValidISODate(s), isValidISODate(e), s <= e else { return nil }
             blocks.append(VacationBlock(startDate: s, endDate: e))
         }
         guard !blocks.isEmpty else { return nil }

@@ -201,7 +201,7 @@ public enum ClotheslineMath: Sendable {
     /// (occupied) or one bare pin pitch (empty).
     public static func slotTotalWidth(slots: [Bool], origins: [CGFloat]) -> CGFloat {
         guard let last = slots.indices.last else { return 0 }
-        return origins[last] + (slots[last] ? slipWidth : emptyPinPitch)
+        return origins[last] + slipWidth
     }
 
     // MARK: - Sway

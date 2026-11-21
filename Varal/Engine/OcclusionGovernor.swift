@@ -126,9 +126,8 @@ public final class OcclusionGovernor {
         guard let list = CGWindowListCopyWindowInfo(options, CGWindowID(desktopWindowNumber)) as? [[String: Any]] else {
             return 1.0
         }
-        var coveredArea: CGFloat = 0
-        var totalArea: CGFloat = 0
-        let yardBounds = yardRects.reduce(CGRect.null) { $0.union($1) }
+        guard let screen else { return 1.0 }
+        var windows: [CGRect] = []
         for info in list {
             guard let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
                   let layer = info[kCGWindowLayer as String] as? Int,
@@ -139,26 +138,48 @@ public final class OcclusionGovernor {
                   let w = boundsDict["Width"] as? CGFloat,
                   let h = boundsDict["Height"] as? CGFloat
             else { continue }
-            // CGWindow coordinates are bottom-left origin; yardRects are in
-            // screen coordinates — intersect in the shared global space after
-            // flipping yard rects via the screen height.
-            if let screen = screen {
-                let flipped = yardRects.map {
-                    CGRect(x: $0.origin.x,
-                           y: screen.frame.height - $0.origin.y - $0.height,
-                           width: $0.width, height: $0.height)
-                }
-                let winRect = CGRect(x: x, y: y, width: w, height: h)
-                for r in flipped {
-                    coveredArea += r.intersection(winRect).area
-                    totalArea += r.area
-                }
-            } else {
-                _ = yardBounds
-            }
+            windows.append(CGRect(x: x, y: y, width: w, height: h))
         }
+        let primaryHeight = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height ?? screen.frame.height
+        let yards = yardRects.map { r in
+            CGRect(x: screen.frame.minX + r.minX,
+                   y: primaryHeight - (screen.frame.minY + r.maxY),
+                   width: r.width, height: r.height)
+        }
+        let totalArea = yards.reduce(CGFloat.zero) { $0 + $1.area }
         guard totalArea > 0 else { return 1.0 }
+        let coveredArea = yards.reduce(CGFloat.zero) { $0 + unionArea(windows.map { $0.intersection($1) }) }
         return max(0, min(1, 1 - Double(coveredArea / totalArea)))
+    }
+
+    private static func unionArea(_ rects: [CGRect]) -> CGFloat {
+        let valid = rects.filter { !$0.isNull && !$0.isEmpty }
+        let xs = Array(Set(valid.flatMap { [$0.minX, $0.maxX] })).sorted()
+        guard xs.count > 1 else { return 0 }
+        var area: CGFloat = 0
+        for i in 0..<(xs.count - 1) {
+            let width = xs[i + 1] - xs[i]
+            let intervals = valid.filter { $0.minX < xs[i + 1] && $0.maxX > xs[i] }
+                .map { ($0.minY, $0.maxY) }.sorted { $0.0 < $1.0 }
+            var covered: CGFloat = 0
+            var start: CGFloat?
+            var end: CGFloat = 0
+            for interval in intervals {
+                if let current = start, interval.0 > end {
+                    covered += end - current
+                    start = interval.0
+                    end = interval.1
+                } else if start == nil {
+                    start = interval.0
+                    end = interval.1
+                } else {
+                    end = max(end, interval.1)
+                }
+            }
+            if let start { covered += end - start }
+            area += width * covered
+        }
+        return area
     }
 }
 

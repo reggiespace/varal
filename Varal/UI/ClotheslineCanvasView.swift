@@ -225,17 +225,17 @@ public final class ClotheslineCanvasView: NSView {
         if mode == .portrait {
             availableWidth = W - 48
             step = ClotheslineMath.clusterStep(
-                slipCount: hanging.count, expanded: expanded,
+                slipCount: slots.count, expanded: expanded,
                 availableWidth: max(200, availableWidth), portraitLine2: true)
         } else if ultrawide {
             availableWidth = max(200, trailLeft - leadRight - 16)
             step = ClotheslineMath.ultrawideClusterStep(
-                slipCount: hanging.count, expanded: expanded,
+                slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth)
         } else {
             availableWidth = max(200, W - 2 * 190)
             step = ClotheslineMath.clusterStep(
-                slipCount: hanging.count, expanded: expanded,
+                slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth, portraitLine2: false)
         }
         let pushOut: CGFloat = (mode == .landscape && expanded)
