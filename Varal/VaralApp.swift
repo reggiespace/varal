@@ -132,6 +132,7 @@ final class VaralApp: NSObject, NSApplicationDelegate {
     // MARK: - Governor application
 
     private func applyGovernor(_ decision: GovernorCore.Decision) {
+        canvas?.isMotionAllowed = decision.isMotionAllowed
         if decision.isDesktopCanvasRenderActive {
             canvas?.rendersAtFullRate = true
             atmosPiece.setSuspended(false)
@@ -159,10 +160,17 @@ final class VaralApp: NSObject, NSApplicationDelegate {
                   let y = bounds["Y"] as? CGFloat
             else { continue }
             let r = CGRect(x: x, y: y, width: w, height: h)
+            let primaryHeight = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height ?? screenFrame.height
+            let screenCGFrame = CGRect(
+                x: screenFrame.minX,
+                y: primaryHeight - screenFrame.maxY,
+                width: screenFrame.width,
+                height: screenFrame.height)
             // Fullscreen space on the chosen display: an opaque normal window
             // covering (nearly) the whole screen.
-            if r.width >= screenFrame.width - 2, r.height >= screenFrame.height - 2,
-               abs(r.minX - screenFrame.minX) < 4 {
+            if r.width >= screenCGFrame.width - 2, r.height >= screenCGFrame.height - 2,
+               abs(r.minX - screenCGFrame.minX) < 4,
+               abs(r.minY - screenCGFrame.minY) < 4 {
                 return true
             }
         }

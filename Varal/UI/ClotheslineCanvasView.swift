@@ -54,6 +54,7 @@ public final class ClotheslineCanvasView: NSView {
     public var rendersAtFullRate = true {
         didSet { rendersAtFullRate ? startLoop() : stopLoop() }
     }
+    public var isMotionAllowed = true
 
     public var onHitRectsChanged: (@MainActor ([CGRect]) -> Void)?
 
@@ -334,7 +335,7 @@ public final class ClotheslineCanvasView: NSView {
 
         // Prune slip views for torn-off/deleted slips; add new ones.
         let hangingIDs = Set(slipStore.hangingSlips.map(\.id))
-        for id in slipViews.keys where !hangingIDs.contains(id) {
+        for id in slipViews.keys where !hangingIDs.contains(id) && flutterTimers[id] == nil {
             slipViews[id]?.removeFromSuperview()
             slipViews.removeValue(forKey: id)
         }
@@ -474,7 +475,12 @@ public final class ClotheslineCanvasView: NSView {
         slipStore.tearOff(id: id)
         pulls.removeValue(forKey: id)
         engine.tick(dt: 1.0 / 60.0, equilibrium1: equilibrium(forLine: 1, mode: layoutMode), equilibrium2: equilibrium(forLine: 2, mode: layoutMode))
-        flyToBasket(view: view, id: id)
+        if isMotionAllowed {
+            flyToBasket(view: view, id: id)
+        } else {
+            view.removeFromSuperview()
+            slipViews.removeValue(forKey: id)
+        }
         refresh()
     }
 

@@ -143,7 +143,7 @@ public final class OcclusionGovernor {
         let primaryHeight = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height ?? screen.frame.height
         let yards = yardRects.map { r in
             CGRect(x: screen.frame.minX + r.minX,
-                   y: primaryHeight - (screen.frame.minY + r.maxY),
+                   y: primaryHeight - screen.frame.maxY + r.minY,
                    width: r.width, height: r.height)
         }
         let totalArea = yards.reduce(CGFloat.zero) { $0 + $1.area }

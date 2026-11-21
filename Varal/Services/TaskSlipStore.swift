@@ -11,6 +11,7 @@ public final class TaskSlipStore {
 
     private let fileURL: URL
     private var canPersist = true
+    public var canMutate: Bool { canPersist }
     private(set) public var slips: [TaskSlip] = []
 
     public init(fileURL: URL? = nil) {
@@ -38,7 +39,6 @@ public final class TaskSlipStore {
                 withIntermediateDirectories: true
             )
             let data = try JSONEncoder().encode(slips)
-            let tmp = fileURL.appendingPathExtension("tmp")
             try data.write(to: fileURL, options: .atomic)
         } catch {
             NSLog("Varal: failed to save slips.json: \(error)")
@@ -77,6 +77,7 @@ public final class TaskSlipStore {
 
     @discardableResult
     public func addTask(_ input: String, now: Date = Date()) -> TaskSlip? {
+        guard canPersist else { return nil }
         let parsed = Self.parseQuickAdd(input, now: now)
         guard !parsed.title.isEmpty else { return nil }
         let slip = TaskSlip(timeLabel: parsed.timeLabel, title: parsed.title, createdAt: now, pinSlotIndex: nextSlotIndex())
@@ -87,6 +88,7 @@ public final class TaskSlipStore {
 
     /// Test seam: pin a fully-formed slip (used by GLW reminder sync).
     public func pin(_ slip: TaskSlip) {
+        guard canPersist else { return }
         slips.append(slip)
         save()
     }
@@ -94,6 +96,7 @@ public final class TaskSlipStore {
     /// Phase C: downward tear-off detaches the slip; the empty clothespin
     /// stays on the line (pinSlotIndex retained) at 18pt bare-pin pitch.
     public func tearOff(id: UUID, at date: Date = Date()) {
+        guard canPersist else { return }
         guard let i = slips.firstIndex(where: { $0.id == id }), slips[i].isHanging else { return }
         slips[i].state = .inBasket(completedAt: date)
         save()
@@ -101,12 +104,14 @@ public final class TaskSlipStore {
 
     /// Undo: drag back from the basket restores `.hanging` at the same slot.
     public func undoToLine(id: UUID) {
+        guard canPersist else { return }
         guard let i = slips.firstIndex(where: { $0.id == id }), !slips[i].isHanging else { return }
         slips[i].state = .hanging
         save()
     }
 
     public func removeSlip(id: UUID) {
+        guard canPersist else { return }
         slips.removeAll { $0.id == id }
         save()
     }
@@ -121,6 +126,7 @@ public final class TaskSlipStore {
     /// Returns the number of deleted slips.
     @discardableResult
     public func deleteBasketSlips() -> Int {
+        guard canPersist else { return 0 }
         let before = slips.count
         slips.removeAll { !$0.isHanging }
         compactSlotIndexes()
@@ -132,6 +138,7 @@ public final class TaskSlipStore {
     /// weather (`weatheredDays += 1`).
     @discardableResult
     public func applyRollover() -> (deleted: Int, weathered: Int) {
+        guard canPersist else { return (0, 0) }
         let deleted = deleteBasketSlips()
         var weathered = 0
         for i in slips.indices where slips[i].isHanging {

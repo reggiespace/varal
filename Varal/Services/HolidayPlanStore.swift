@@ -105,7 +105,7 @@ public final class HolidayPlanStore {
     /// idempotently by `(sourcePlanID, sourceBlockStart)`; removes orphaned
     /// `.hanging` reminder slips whose block left the plan or is now >7d out.
     public func syncReminderSlips(today: String, now: Date = Date()) {
-        guard canPersist else { return }
+        guard canPersist, slipStore.canMutate else { return }
         var wanted: Set<String> = [] // "planID|blockStart"
         for plan in plans.values {
             for block in plan.blocks {
