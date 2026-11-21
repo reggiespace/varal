@@ -1,5 +1,31 @@
 import AppKit
 
+/// One computed frame of the yard geometry: piece frames, per-slot slip
+/// frames, and clothespin rects. Pure value; the canvas applies it to views
+/// and uses it for rope/pin drawing and hit-testing.
+public struct YardLayout: Sendable {
+    public struct PieceFrame: Sendable {
+        public let id: String
+        public let frame: CGRect
+    }
+    public struct SlipFrame: Sendable {
+        public let id: UUID
+        public let slot: Int
+        public let frame: CGRect
+    }
+    public var pieceFrames: [PieceFrame] = []
+    public var slipFrames: [SlipFrame] = []
+    /// 18pt bare-pin rects for slots with no hanging slip (torn/undo).
+    public var emptyPinRects: [CGRect] = []
+    /// Pin rects for occupied slots (drawn over the slip top).
+    public var occupiedPinRects: [CGRect] = []
+    public var clusterRect: CGRect = .zero
+    public var line1Y: CGFloat = 0
+    public var line2Y: CGFloat = 0
+    public var sag1: CGFloat = 0
+    public var sag2: CGFloat = 0
+}
+
 /// Clothesline stage on the selected display. Top-left (flipped) coordinate
 /// space; ropes, pins, pieces, slips, and the basket are laid out here.
 ///
@@ -19,6 +45,7 @@ public final class ClotheslineCanvasView: NSView {
     private var dwellTimer: Timer?
     private var collapseTimer: Timer?
     private var slipViews: [UUID: TaskSlipView] = [:]
+    private var pieceViews: [String: NSView] = [:]
     var basketView = LaundryBasketView()
     private var pulls: [UUID: CGFloat] = [:]
     private var flutterTimers: [UUID: Timer] = [:]
@@ -106,103 +133,255 @@ public final class ClotheslineCanvasView: NSView {
         }
     }
 
-    // MARK: - Refresh / layout
+    // MARK: - Unified layout (single source of truth)
+
+    /// Computes every frame from current bounds, stores, and engine sag.
+    /// Slot-stable: slips are positioned by `pinSlotIndex`, so tearing one
+    /// slip leaves its neighbors exactly where they were.
+    public func computeLayout() -> YardLayout {
+        let mode = layoutMode
+        let pieces = piecesProvider()
+        let W = bounds.width
+        let sag1 = engine.sagLine1
+        let sag2 = engine.sagLine2
+        let expanded = engine.clusterExpanded
+        let ultrawide = ClotheslineMath.isUltrawide(size: bounds.size)
+        var layout = YardLayout(
+            line1Y: line1Y, line2Y: line2Y, sag1: sag1, sag2: sag2)
+
+        let leading = pieces.filter { $0.preferredSide == .leading }
+        let trailing = pieces.filter { $0.preferredSide == .trailing }
+
+        // Piece placement: ultrawide centers pieces in the display thirds;
+        // standard and portrait keep the legacy edge anchors pixel-identical.
+        var leadRight: CGFloat = 24
+        var trailLeft: CGFloat = W - 24
+        if mode == .landscape, ultrawide {
+            for piece in leading {
+                let w = piece.sizeMetrics.width
+                layout.pieceFrames.append(.init(
+                    id: piece.pieceID,
+                    frame: NSRect(
+                        x: ClotheslineMath.thirdsLeadingX(displayWidth: W, pieceWidth: w),
+                        y: line1Y, width: w, height: piece.sizeMetrics.height)))
+            }
+            for piece in trailing {
+                let w = piece.sizeMetrics.width
+                layout.pieceFrames.append(.init(
+                    id: piece.pieceID,
+                    frame: NSRect(
+                        x: ClotheslineMath.thirdsTrailingX(displayWidth: W, pieceWidth: w),
+                        y: line1Y, width: w, height: piece.sizeMetrics.height)))
+            }
+        } else {
+            var xLead: CGFloat = 24
+            for piece in leading {
+                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+                layout.pieceFrames.append(.init(
+                    id: piece.pieceID,
+                    frame: NSRect(x: xLead, y: line1Y, width: w, height: h)))
+                xLead += w + 16
+            }
+            var xTrail: CGFloat = W - 24
+            for piece in trailing.reversed() {
+                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+                xTrail -= w
+                layout.pieceFrames.append(.init(
+                    id: piece.pieceID,
+                    frame: NSRect(x: xTrail, y: line1Y, width: w, height: h)))
+                xTrail -= 16
+            }
+        }
+        if ultrawide {
+            leadRight = layout.pieceFrames
+                .filter { leading.map(\.pieceID).contains($0.id) }
+                .map(\.frame.maxX).max() ?? 24
+            trailLeft = layout.pieceFrames
+                .filter { trailing.map(\.pieceID).contains($0.id) }
+                .map(\.frame.minX).min() ?? W - 24
+        } else if mode == .landscape {
+            leadRight = layout.pieceFrames
+                .filter { leading.map(\.pieceID).contains($0.id) }
+                .map(\.frame.maxX).max() ?? 24
+            trailLeft = layout.pieceFrames
+                .filter { trailing.map(\.pieceID).contains($0.id) }
+                .map(\.frame.minX).min() ?? W - 24
+        }
+
+        // Cluster expansion pushes shared-rope pieces toward the edges.
+        let hanging = slipStore.hangingSlips.sorted { $0.pinSlotIndex < $1.pinSlotIndex }
+        let inBasketSlots = Set(slipStore.basketSlips.map(\.pinSlotIndex))
+        let maxSlot = (hanging.map(\.pinSlotIndex) + inBasketSlots).max() ?? -1
+        var slots: [Bool] = []
+        if maxSlot >= 0 {
+            let bySlot = Dictionary(uniqueKeysWithValues: hanging.map { ($0.pinSlotIndex, $0) })
+            slots = (0...maxSlot).map { bySlot[$0] != nil }
+        }
+        let slipLineY = (mode == .portrait) ? line2Y : line1Y
+        let slipSag = (mode == .portrait) ? sag2 : sag1
+
+        let step: CGFloat
+        let availableWidth: CGFloat
+        if mode == .portrait {
+            availableWidth = W - 48
+            step = ClotheslineMath.clusterStep(
+                slipCount: hanging.count, expanded: expanded,
+                availableWidth: max(200, availableWidth), portraitLine2: true)
+        } else if ultrawide {
+            availableWidth = max(200, trailLeft - leadRight - 16)
+            step = ClotheslineMath.ultrawideClusterStep(
+                slipCount: hanging.count, expanded: expanded,
+                availableWidth: availableWidth)
+        } else {
+            availableWidth = max(200, W - 2 * 190)
+            step = ClotheslineMath.clusterStep(
+                slipCount: hanging.count, expanded: expanded,
+                availableWidth: availableWidth, portraitLine2: false)
+        }
+        let pushOut: CGFloat = (mode == .landscape && expanded)
+            ? max(0, (CGFloat(max(hanging.count, 1)) * step - CGFloat(max(hanging.count, 1)) * ClotheslineMath.shingledStep) / 2) : 0
+        if expanded, mode == .landscape {
+            for i in layout.pieceFrames.indices {
+                let id = layout.pieceFrames[i].id
+                var f = layout.pieceFrames[i].frame
+                if leading.map(\.pieceID).contains(id) { f.origin.x -= pushOut }
+                else { f.origin.x += pushOut }
+                layout.pieceFrames[i] = .init(id: id, frame: f)
+            }
+            if !ultrawide {
+                leadRight = layout.pieceFrames
+                    .filter { leading.map(\.pieceID).contains($0.id) }
+                    .map(\.frame.maxX).max() ?? 24
+                trailLeft = layout.pieceFrames
+                    .filter { trailing.map(\.pieceID).contains($0.id) }
+                    .map(\.frame.minX).min() ?? W - 24
+            } else {
+                leadRight -= pushOut
+                trailLeft += pushOut
+            }
+        }
+
+        // Slot-stable slip positions + pin rects.
+        let origins = ClotheslineMath.slotOrigins(slots: slots, step: step)
+        let totalW = ClotheslineMath.slotTotalWidth(slots: slots, origins: origins)
+        var x0 = (W - totalW) / 2
+        if mode == .landscape {
+            x0 = max(x0, leadRight + 8)
+            if x0 + totalW > trailLeft - 8 { x0 = trailLeft - 8 - totalW }
+        }
+        if !hanging.isEmpty {
+            let bySlot = Dictionary(uniqueKeysWithValues: hanging.map { ($0.pinSlotIndex, $0) })
+            for slot in slots.indices {
+                let x = x0 + origins[slot]
+                let pull = bySlot[slot].flatMap { pulls[$0.id] } ?? 0
+                let ropeDip = pull <= 18 ? 0.45 * pull : 0.45 * 18
+                if let slip = bySlot[slot] {
+                    layout.slipFrames.append(.init(
+                        id: slip.id, slot: slot,
+                        frame: NSRect(
+                            x: x, y: slipLineY + slipSag * 0.925 + ropeDip,
+                            width: ClotheslineMath.slipWidth,
+                            height: ClotheslineMath.slipHeight)))
+                    layout.occupiedPinRects.append(pinRect(
+                        slotX: x, slotWidth: ClotheslineMath.slipWidth,
+                        ropeY: slipLineY + slipSag * 0.925))
+                } else {
+                    // Bare pin stays centered where the torn slip's pin was.
+                    layout.emptyPinRects.append(pinRect(
+                        slotX: x, slotWidth: ClotheslineMath.slipWidth,
+                        ropeY: slipLineY + slipSag * 0.925))
+                }
+            }
+            let minX = layout.slipFrames.map(\.frame.minX).min() ?? x0
+            let maxX = layout.slipFrames.map(\.frame.maxX).max() ?? x0
+            layout.clusterRect = CGRect(
+                x: min(minX, x0) - 8, y: slipLineY - 24,
+                width: max(maxX, x0 + totalW) - min(minX, x0) + 16, height: 200)
+        }
+        return layout
+    }
+
+    /// Wooden clothespin straddling the rope above a slip (or bare slot).
+    private func pinRect(slotX: CGFloat, slotWidth: CGFloat, ropeY: CGFloat) -> CGRect {
+        let w: CGFloat = 14
+        return CGRect(x: slotX + (slotWidth - w) / 2, y: ropeY - 14, width: w, height: 26)
+    }
+
+    // MARK: - Refresh / layout application
 
     /// Rebuilds piece + slip subviews and positions after any store change.
     public func refresh() {
-        let mode = layoutMode
+        let layout = computeLayout()
         let pieces = piecesProvider()
-        let hanging = slipStore.hangingSlips.sorted { $0.pinSlotIndex < $1.pinSlotIndex }
-        let W = bounds.width
 
-        // Mount big-piece views (generic: no Atmos/GLW naming here).
+        // Mount big-piece views (generic: no Atmos/GLW naming here);
+        // unmount views for pieces no longer enabled.
+        let activeIDs = Set(pieces.map(\.pieceID))
+        for id in pieceViews.keys where !activeIDs.contains(id) {
+            pieceViews[id]?.removeFromSuperview()
+            pieceViews.removeValue(forKey: id)
+        }
         for piece in pieces {
             let v = mainView(of: piece)
-            if v.superview !== self { addSubview(v) }
+            if pieceViews[piece.pieceID] == nil {
+                pieceViews[piece.pieceID] = v
+                if v.superview !== self { addSubview(v) }
+            }
         }
-        // Remove views for disabled pieces.
-        let activeIDs = Set(pieces.map(\.pieceID))
-        _ = activeIDs
+        for frame in layout.pieceFrames {
+            pieceViews[frame.id]?.frame = frame.frame
+        }
 
         // Prune slip views for torn-off/deleted slips; add new ones.
-        let hangingIDs = Set(hanging.map(\.id))
+        let hangingIDs = Set(slipStore.hangingSlips.map(\.id))
         for id in slipViews.keys where !hangingIDs.contains(id) {
             slipViews[id]?.removeFromSuperview()
             slipViews.removeValue(forKey: id)
         }
-        for slip in hanging where slipViews[slip.id] == nil {
+        for slip in slipStore.hangingSlips where slipViews[slip.id] == nil {
             let v = TaskSlipView(slip: slip)
-            v.onPullChanged = { [weak self] id, pull in self?.pulls[id] = pull }
+            v.onPullChanged = { [weak self] id, pull in
+                self?.pulls[id] = pull
+                // Release (pull back to 0) re-seats the slip on its pin.
+                if pull == 0 { self?.refresh() }
+            }
             v.onTearOff = { [weak self] id in self?.completeTearOff(id: id) }
             slipViews[slip.id] = v
             addSubview(v)
         }
 
-        let sag1 = engine.sagLine1
-        let expanded = engine.clusterExpanded
-        let step = ClotheslineMath.clusterStep(
-            slipCount: hanging.count, expanded: expanded,
-            availableWidth: max(200, W - 2 * 190), portraitLine2: mode == .portrait)
-
-        // Piece layout.
-        let leading = pieces.filter { $0.preferredSide == .leading }
-        let trailing = pieces.filter { $0.preferredSide == .trailing }
-        var xLead: CGFloat = 24
-        var xTrail: CGFloat = W - 24
-        let pushOut: CGFloat = (mode == .landscape && expanded)
-            ? max(0, (CGFloat(hanging.count) * step - CGFloat(hanging.count) * ClotheslineMath.shingledStep) / 2) : 0
-        for piece in leading {
-            let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
-            mainView(of: piece).frame = NSRect(x: xLead - pushOut, y: line1Y, width: w, height: h)
-            xLead += w + 16
-        }
-        for piece in trailing.reversed() {
-            let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
-            xTrail -= w
-            mainView(of: piece).frame = NSRect(x: xTrail + pushOut, y: line1Y, width: w, height: h)
-            xTrail -= 16
-        }
-
-        // Slip layout.
-        let slipLineY = (mode == .portrait) ? line2Y : line1Y
-        let totalW = hanging.isEmpty ? 0 : CGFloat(hanging.count - 1) * step + ClotheslineMath.slipWidth
-        var x0 = (W - totalW) / 2
-        if mode == .landscape {
-            // Keep the cluster clear of the big cards.
-            x0 = max(x0, xLead + 8)
-            if x0 + totalW > xTrail - 8 { x0 = xTrail - 8 - totalW }
-        }
-        for (i, slip) in hanging.enumerated() {
-            let v = slipViews[slip.id]
-            let pull = pulls[slip.id] ?? 0
-            let ropeDip = pull <= 18 ? 0.45 * pull : 0.45 * 18
-            v?.frame = NSRect(
-                x: x0 + CGFloat(i) * step,
-                y: slipLineY + sag1 * 0.925 + ropeDip,
-                width: ClotheslineMath.slipWidth, height: ClotheslineMath.slipHeight)
-        }
+        applyLayout(layout)
 
         // Basket anchored bottom-right (full vertical drop for flutter).
         let bw = LaundryBasketView.basketSize.width
         let bh = LaundryBasketView.basketSize.height
-        basketView.frame = NSRect(x: W - bw - 32, y: bounds.height - bh - 64 - 20, width: bw, height: bh)
+        basketView.frame = NSRect(x: bounds.width - bw - 32, y: bounds.height - bh - 64 - 20, width: bw, height: bh)
         basketView.basketCount = slipStore.basketSlips.count
-        basketView.hangingCount = hanging.count
+        basketView.hangingCount = slipStore.hangingSlips.count
         basketView.updateLabels()
 
-        publishHitRects(pieces: pieces, hangingCount: hanging.count)
+        publishHitRects(layout: layout)
         needsDisplay = true
     }
 
-    private func publishHitRects(pieces: [any CompanionPiece], hangingCount: Int) {
-        var rects: [CGRect] = pieces.map { mainView(of: $0).frame }
-        // Small-slip cluster zone (dwell-gated expansion reads this too).
-        if hangingCount > 0 {
-            let xs = slipViews.values.map(\.frame.origin.x)
-            let minX = (xs.min() ?? 0) - 8
-            let maxX = (xs.max() ?? 0) + ClotheslineMath.slipWidth + 8
-            let y = (layoutMode == .portrait ? line2Y : line1Y) - 24
-            rects.append(CGRect(x: minX, y: y, width: max(60, maxX - minX), height: 200))
+    /// Applies precomputed frames to subviews. Pointer-dragged slips keep
+    /// their pointer-driven position; everything else follows the layout.
+    private func applyLayout(_ layout: YardLayout) {
+        for frame in layout.pieceFrames {
+            pieceViews[frame.id]?.frame = frame.frame
+        }
+        for slipFrame in layout.slipFrames {
+            guard let v = slipViews[slipFrame.id],
+                  flutterTimers[slipFrame.id] == nil,
+                  !v.isDragging else { continue }
+            v.setFrameOrigin(slipFrame.frame.origin)
+        }
+    }
+
+    private func publishHitRects(layout: YardLayout) {
+        var rects: [CGRect] = layout.pieceFrames.map(\.frame)
+        if !layout.clusterRect.isNull, layout.clusterRect.width > 0 {
+            rects.append(layout.clusterRect)
         }
         rects.append(basketView.frame.insetBy(dx: -16, dy: -24))
         onHitRectsChanged?(rects)
@@ -213,24 +392,51 @@ public final class ClotheslineCanvasView: NSView {
         refresh()
     }
 
-    // MARK: - Rope drawing
+    // MARK: - Rope + pin drawing
 
     public override func draw(_ dirtyRect: NSRect) {
+        // Extra local dip while a slip is mid-drag (prototype behavior:
+        // rope follows 0.45 * pull, capped at +28pt).
+        let maxPull = pulls.values.max() ?? 0
+        let extraDip = min(28, 0.45 * maxPull)
         NSColor(calibratedWhite: 0.6, alpha: 1).setStroke()
         let W = bounds.width
         func rope(atY y: CGFloat, sag: CGFloat) {
+            let a = ClotheslineMath.ropeCubicControlYOffset(sag: sag + extraDip)
             let path = NSBezierPath()
             path.move(to: NSPoint(x: 0, y: y))
             path.curve(to: NSPoint(x: W, y: y),
-                       controlPoint1: NSPoint(x: W * 0.25, y: y + ClotheslineMath.controlPointYOffset(sag: sag) * 0.55),
-                       controlPoint2: NSPoint(x: W * 0.75, y: y + ClotheslineMath.controlPointYOffset(sag: sag) * 0.55))
+                       controlPoint1: NSPoint(x: W / 3, y: y + a),
+                       controlPoint2: NSPoint(x: 2 * W / 3, y: y + a))
             path.lineWidth = 1.5
             path.stroke()
         }
-        rope(atY: line1Y, sag: engine.sagLine1)
+        let layout = computeLayout()
+        rope(atY: layout.line1Y, sag: layout.sag1)
         if layoutMode == .portrait {
-            rope(atY: line2Y, sag: engine.sagLine2)
+            rope(atY: layout.line2Y, sag: layout.sag2)
         }
+        // Clothespins: wooden pins over every occupied slip top + bare
+        // pins at empty slots where torn slips used to hang.
+        for rect in layout.occupiedPinRects + layout.emptyPinRects {
+            drawPin(rect)
+        }
+    }
+
+    private func drawPin(_ rect: CGRect) {
+        let pin = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+        NSColor(calibratedWhite: 0.72, alpha: 1).setFill()
+        pin.fill()
+        NSColor(calibratedWhite: 0.5, alpha: 1).setStroke()
+        pin.lineWidth = 1
+        pin.stroke()
+        // Wire groove across the middle.
+        let groove = NSBezierPath()
+        groove.move(to: NSPoint(x: rect.minX + 2, y: rect.midY))
+        groove.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY))
+        NSColor(calibratedWhite: 0.45, alpha: 1).setStroke()
+        groove.lineWidth = 1
+        groove.stroke()
     }
 
     // MARK: - Dwell-gated cluster (150ms in, 250ms out)
@@ -300,10 +506,37 @@ public final class ClotheslineCanvasView: NSView {
         }
     }
 
+    /// Undo: the slip flies back up from the basket and snaps into its
+    /// empty clothespin at `pinSlotIndex`, restoring 4.5pt of rope sag.
     private func undoTopSlip() {
         guard let top = slipStore.basketSlips.last else { return }
+        let from = NSPoint(x: basketView.frame.midX - 52, y: basketView.frame.minY - 10)
         slipStore.undoToLine(id: top.id)
+        engine.tick(dt: 1.0 / 60.0, equilibrium1: equilibrium(forLine: 1, mode: layoutMode), equilibrium2: equilibrium(forLine: 2, mode: layoutMode))
         refresh()
+        guard let view = slipViews[top.id] else { return }
+        let to = view.frame.origin
+        view.setFrameOrigin(from)
+        view.frameRotation = 0
+        let start = Date()
+        let duration = 0.35
+        flutterTimers[top.id]?.invalidate()
+        flutterTimers[top.id] = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                let t = min(1, Date().timeIntervalSince(start) / duration)
+                guard t < 1 else {
+                    self?.flutterTimers[top.id]?.invalidate()
+                    self?.flutterTimers.removeValue(forKey: top.id)
+                    self?.refresh()
+                    return
+                }
+                // Ease-out: fast lift, gentle seat onto the pin.
+                let e = 1 - pow(1 - t, 3)
+                view.setFrameOrigin(NSPoint(
+                    x: from.x + (to.x - from.x) * e,
+                    y: from.y + (to.y - from.y) * e))
+            }
+        }
     }
 
     // MARK: - Frame loop (60fps frame timer; 0fps when the governor stops it)
@@ -332,7 +565,7 @@ public final class ClotheslineCanvasView: NSView {
         } else {
             engine.settleInstantly(equilibrium1: e1, equilibrium2: e2)
         }
-        refreshPositionsOnly()
+        applyLayout(computeLayout())
         needsDisplay = true
     }
 
@@ -347,35 +580,12 @@ public final class ClotheslineCanvasView: NSView {
         let pieces = piecesProvider()
         for (i, piece) in pieces.enumerated() {
             let a = ClotheslineMath.swayAngle(time: t, phase: CGFloat(i) * 1.3, amplitudeDegrees: pieceAmp, period: period)
-            mainView(of: piece).frameRotation = a
+            pieceViews[piece.pieceID]?.frameRotation = a
         }
         for (i, id) in slipViews.keys.sorted(by: { "\($0)" < "\($1)" }).enumerated() {
             if flutterTimers[id] != nil { continue }
             let a = ClotheslineMath.swayAngle(time: t, phase: CGFloat(i) * 0.9, amplitudeDegrees: slipAmp, period: period)
             slipViews[id]?.frameRotation = a
-        }
-    }
-
-    /// Cheap per-frame position update without rebuilding subviews.
-    private func refreshPositionsOnly() {
-        let mode = layoutMode
-        let hanging = slipStore.hangingSlips.sorted { $0.pinSlotIndex < $1.pinSlotIndex }
-        let sag1 = engine.sagLine1
-        let expanded = engine.clusterExpanded
-        let W = bounds.width
-        let step = ClotheslineMath.clusterStep(
-            slipCount: hanging.count, expanded: expanded,
-            availableWidth: max(200, W - 2 * 190), portraitLine2: mode == .portrait)
-        let totalW = hanging.isEmpty ? 0 : CGFloat(hanging.count - 1) * step + ClotheslineMath.slipWidth
-        let x0 = (W - totalW) / 2
-        let slipLineY = (mode == .portrait) ? line2Y : line1Y
-        for (i, slip) in hanging.enumerated() {
-            guard let v = slipViews[slip.id], flutterTimers[slip.id] == nil else { continue }
-            let pull = pulls[slip.id] ?? 0
-            let ropeDip = pull <= 18 ? 0.45 * pull : 0.45 * 18
-            v.setFrameOrigin(NSPoint(
-                x: x0 + CGFloat(i) * step,
-                y: slipLineY + sag1 * 0.925 + ropeDip))
         }
     }
 }

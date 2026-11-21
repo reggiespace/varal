@@ -47,6 +47,7 @@ public final class AtmosPiece: NSObject, CompanionPiece {
     private var pathMonitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
     private var suspended = false
+    private var snapshotView: NSImageView?
 
     @MainActor public var pieceView: NSView { container }
 
@@ -84,13 +85,35 @@ public final class AtmosPiece: NSObject, CompanionPiece {
 
     /// Occlusion governor hook: freeze the live web content behind a static
     /// snapshot so WebContent/GPU helpers drop to 0% CPU/GPU. Resume reloads.
+    /// While suspended the card shows the last `takeSnapshot` still image.
     public func setSuspended(_ suspended: Bool) {
         guard suspended != self.suspended else { return }
         self.suspended = suspended
         if suspended {
             webView?.evaluateJavaScript("window.dispatchEvent(new Event('varal-pause'))", completionHandler: nil)
-            webView?.isHidden = true
+            webView?.takeSnapshot(with: nil) { [weak self] image, _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.suspended else { return }
+                    self.webView?.isHidden = true
+                    if let image {
+                        let overlay = NSImageView(image: image)
+                        overlay.imageScaling = .scaleAxesIndependently
+                        overlay.translatesAutoresizingMaskIntoConstraints = false
+                        self.container.addSubview(overlay)
+                        NSLayoutConstraint.activate([
+                            overlay.leadingAnchor.constraint(equalTo: self.container.leadingAnchor),
+                            overlay.trailingAnchor.constraint(equalTo: self.container.trailingAnchor),
+                            overlay.topAnchor.constraint(equalTo: self.container.topAnchor),
+                            overlay.bottomAnchor.constraint(equalTo: self.container.bottomAnchor),
+                        ])
+                        self.snapshotView?.removeFromSuperview()
+                        self.snapshotView = overlay
+                    }
+                }
+            }
         } else {
+            snapshotView?.removeFromSuperview()
+            snapshotView = nil
             webView?.isHidden = false
             webView?.evaluateJavaScript("window.dispatchEvent(new Event('varal-resume'))", completionHandler: nil)
         }

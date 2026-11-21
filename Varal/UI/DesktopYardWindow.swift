@@ -1,8 +1,9 @@
 import AppKit
 
 /// Full-screen transparent desktop window on the single user-selected display.
-/// Window level: `CGWindowLevelForKey(.desktopIconWindow) - 1` — strictly
-/// behind Finder desktop icons and every app window.
+/// Window level: `CGWindowLevelForKey(.desktopIconWindow)`, ordered directly
+/// above the Finder desktop window (correction v1-app2 C11) — strictly
+/// behind every standard application window.
 ///
 /// Hit-testing: `ignoresMouseEvents = true` by default so wallpaper clicks,
 /// right-clicks, and rubber-band marquee pass through to Finder. A passive
@@ -39,7 +40,7 @@ public final class DesktopYardWindow: NSWindow {
         backgroundColor = .clear
         hasShadow = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) - 1)
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)))
         ignoresMouseEvents = true
         placeOnSelectedScreen()
         startHitTestMonitor()
@@ -56,6 +57,44 @@ public final class DesktopYardWindow: NSWindow {
         setFrame(screen.frame, display: true)
         contentView?.frame = NSRect(origin: .zero, size: screen.frame.size)
         contentView?.needsLayout = true
+        if isVisible {
+            orderAboveFinderDesktop()
+        }
+    }
+
+    /// Correction v1-app2 C11: the spec's `desktopIconWindow - 1` level puts
+    /// the yard below the Finder desktop window, which then captures every
+    /// bare-desktop click — nothing (real or synthetic) can ever drag a
+    /// slip. The yard instead sits AT the desktop-icon level and orders
+    /// itself directly above the Finder desktop window: transparent regions
+    /// still pass clicks through to Finder (icons stay clickable), opaque
+    /// pieces receive drags, and every standard app window (`>= .normal`)
+    /// continues to cover the yard. The Finder desktop window is resolved
+    /// dynamically (never a hardcoded id).
+    public func orderAboveFinderDesktop() {
+        guard let desktopID = Self.finderDesktopWindowNumber(on: selectedScreen) else { return }
+        order(.above, relativeTo: desktopID)
+    }
+
+    private static func finderDesktopWindowNumber(on screen: NSScreen) -> Int? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], CGWindowID(0)) as? [[String: Any]] else {
+            return nil
+        }
+        let desktopLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
+        for info in list {
+            guard (info[kCGWindowLayer as String] as? Int) == desktopLevel,
+                  (info[kCGWindowOwnerName as String] as? String) == "Finder",
+                  let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
+                  let x = boundsDict["X"] as? CGFloat,
+                  let y = boundsDict["Y"] as? CGFloat,
+                  let w = boundsDict["Width"] as? CGFloat,
+                  let h = boundsDict["Height"] as? CGFloat,
+                  CGRect(x: x, y: y, width: w, height: h).intersects(screen.frame),
+                  let id = info[kCGWindowNumber as String] as? Int
+            else { continue }
+            return id
+        }
+        return nil
     }
 
     @objc private func screensChanged() {
@@ -93,12 +132,56 @@ public final class DesktopYardWindow: NSWindow {
             if !ignoresMouseEvents { ignoresMouseEvents = true }
             return
         }
-        // Lightweight single-point z-order query: accept events only when no
-        // standard application window covers this exact cursor coordinate.
-        // Our desktop window sits below .normalWindow, so if the topmost
-        // window at this point is ours, the point is uncovered.
+        // Fast path: the yard itself is topmost at this point.
         let top = NSWindow.windowNumber(at: mouse, belowWindowWithWindowNumber: 0)
-        ignoresMouseEvents = (top != windowNumber)
+        if top == windowNumber {
+            if ignoresMouseEvents { ignoresMouseEvents = false }
+            return
+        }
+        // Slow path (only while hovering yard elements): the point counts
+        // as covered only when a standard application window sits above it
+        // (`normalWindow <= layer < dockWindow`). The Finder desktop layer
+        // the yard intentionally lives under never counts as cover, nor does
+        // system chrome at/above the dock level such as the Dock's
+        // fullscreen click-catcher (correction v1-app2 C10: comparing against
+        // our own window number kept the yard permanently transparent, so
+        // nothing was draggable).
+        let covered = isCoveredByAppWindow(at: mouse)
+        ignoresMouseEvents = covered
+    }
+
+    /// Coverage decision over the front-to-back layer list of opaque windows
+    /// containing the point (pure seam for tests). Covered only by standard
+    /// application windows (`normal <= layer < dock`): the Finder desktop
+    /// layer the yard lives under — and system chrome above the dock level
+    /// such as the Dock's fullscreen click-catcher — never count as cover.
+    public static func isCoveredByLayers(_ layers: [Int]) -> Bool {
+        guard let top = layers.first else { return false }
+        return top >= Int(CGWindowLevelForKey(.normalWindow))
+            && top < Int(CGWindowLevelForKey(.dockWindow))
+    }
+
+    /// Front-to-back scan for the first opaque window at `point`, applying
+    /// the `isCoveredByLayers` decision to its layer.
+    private func isCoveredByAppWindow(at point: NSPoint) -> Bool {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], CGWindowID(0)) as? [[String: Any]] else {
+            return true // Fail closed when the WindowServer cannot answer.
+        }
+        for info in list {
+            if (info[kCGWindowNumber as String] as? Int) == windowNumber { continue } // never self-cover
+            guard let b = info[kCGWindowBounds as String] as? [String: Any],
+                  let x = b["X"] as? CGFloat,
+                  let y = b["Y"] as? CGFloat,
+                  let w = b["Width"] as? CGFloat,
+                  let h = b["Height"] as? CGFloat,
+                  CGRect(x: x, y: y, width: w, height: h).contains(point)
+            else { continue }
+            let alpha = info[kCGWindowAlpha as String] as? Double ?? 1.0
+            guard alpha > 0.5 else { continue }
+            let layer = info[kCGWindowLayer as String] as? Int ?? 0
+            return Self.isCoveredByLayers([layer])
+        }
+        return false
     }
 
     deinit {

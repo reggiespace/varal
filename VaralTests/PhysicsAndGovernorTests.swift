@@ -101,7 +101,7 @@ struct PhysicsAndGovernorTests {
         #expect(ClotheslineMath.layoutMode(size: CGSize(width: 1000, height: 1000)) == .landscape)
         #expect(ClotheslineMath.layoutMode(size: CGSize(width: 900, height: 1440)) == .portrait)
         #expect(ClotheslineMath.lineY(topSafeInset: 0) == 38)
-        #expect(ClotheslineMath.lineY(topSafeInset: 40) == 54)
+        #expect(ClotheslineMath.lineY(topSafeInset: 40) == 68)
         #expect(ClotheslineMath.secondLineY(firstLineY: 38) == 273)
         #expect(ClotheslineMath.clampedLineY(10, topSafeMargin: 24) == 26)
     }

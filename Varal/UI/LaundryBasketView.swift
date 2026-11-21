@@ -1,11 +1,16 @@
 import AppKit
 
 /// Bottom-right laundry basket (`cesto`, 112×64pt). Renders stacked
-/// completed slips + the day-complete caption, handles drag-up undo
-/// (>60pt toward the line) and the manual [Limpar cesto] deletion action.
+/// completed slips + the day-complete caption, supports drag-up undo
+/// (>60pt toward the line) back to the slip's preserved clothespin, and
+/// provides the manual [Limpar cesto] deletion action.
+///
+/// Undo is drag-only (correction v1-app2): a plain click does nothing.
 @MainActor
 public final class LaundryBasketView: NSView {
     public static let basketSize = NSSize(width: 112, height: 64)
+    /// Upward drag distance that completes an undo.
+    public static let undoDragThreshold: CGFloat = 60
 
     public var basketCount: Int = 0 { didSet { needsDisplay = true } }
     public var hangingCount: Int = 0 { didSet { needsDisplay = true } }
@@ -14,6 +19,12 @@ public final class LaundryBasketView: NSView {
 
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private var hoverPeek = false
+    private var dragging = false
+    private var dragAnchorY: CGFloat = 0
+    private var dragLift: CGFloat = 0
+
+    /// Current upward drag distance (test seam).
+    public var currentDragLift: CGFloat { dragLift }
 
     public init() {
         super.init(frame: NSRect(origin: .zero, size: Self.basketSize))
@@ -52,9 +63,12 @@ public final class LaundryBasketView: NSView {
         NSColor(calibratedWhite: 0.55, alpha: 1).setFill()
         basket.fill()
 
-        // Stacked completed slips above the rim.
+        // Stacked completed slips above the rim; while dragging one back
+        // to the line, the top slip follows the pointer upward.
+        let lift = dragging ? dragLift : (hoverPeek ? 10 : 0)
         for i in 0..<min(basketCount, 4) {
-            let slip = NSBezierPath(rect: NSRect(x: 22 + CGFloat(i) * 8, y: bounds.height - 18 - CGFloat(i) * 6, width: 60, height: 16))
+            let raised = (i == min(basketCount, 4) - 1) ? lift : 0
+            let slip = NSBezierPath(rect: NSRect(x: 22 + CGFloat(i) * 8, y: bounds.height - 18 - CGFloat(i) * 6 + raised, width: 60, height: 16))
             NSColor.white.setFill()
             slip.fill()
             NSColor(calibratedWhite: 0.7, alpha: 1).setStroke()
@@ -67,7 +81,7 @@ public final class LaundryBasketView: NSView {
         if hangingCount == 0 && basketCount > 0 {
             caption = UIStrings.dayCompleteCaption(doneCount: basketCount, locale: locale)
         } else {
-            caption = "cesto (\(basketCount))"
+            caption = UIStrings.basketCountLabel(count: basketCount, locale: locale)
         }
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10),
@@ -91,10 +105,32 @@ public final class LaundryBasketView: NSView {
         needsDisplay = true
     }
 
+    // MARK: - Drag-up undo (>60pt toward the line)
+
     public override func mouseDown(with event: NSEvent) {
-        // Click = undo top slip (accessibility path); drag-up >60pt also
-        // handled by the canvas via onUndoTop.
-        onUndoTop?()
+        guard basketCount > 0 else { return }
+        dragging = true
+        dragAnchorY = event.locationInWindow.y
+        dragLift = 0
+    }
+
+    public override func mouseDragged(with event: NSEvent) {
+        guard dragging else { return }
+        // Upward drag in window coords (bottom-left origin: up is +y).
+        dragLift = max(0, event.locationInWindow.y - dragAnchorY)
+        needsDisplay = true
+    }
+
+    public override func mouseUp(with event: NSEvent) {
+        guard dragging else { return }
+        dragging = false
+        let lift = max(0, event.locationInWindow.y - dragAnchorY)
+        dragLift = 0
+        needsDisplay = true
+        // Drag-only undo: a click (or short drag) does nothing.
+        if lift > Self.undoDragThreshold {
+            onUndoTop?()
+        }
     }
 
     @objc private func emptyBasket() {

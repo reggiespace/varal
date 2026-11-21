@@ -105,6 +105,7 @@ final class VaralApp: NSObject, NSApplicationDelegate {
             andEventID: AEEventID(kAEGetURL))
 
         yard.orderFrontRegardless()
+        yard.orderAboveFinderDesktop()
         canvas.refresh()
         applyGovernor(governor.decision)
     }

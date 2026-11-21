@@ -137,10 +137,12 @@ public final class MenuBarController {
             listStack.addArrangedSubview(row)
         }
         if let basketLabel = root.viewWithTag(99) as? NSTextField {
-            basketLabel.stringValue = "Basket: \(slipStore.basketSlips.count)"
+            basketLabel.stringValue = UIStrings.basketCountLabel(count: slipStore.basketSlips.count, locale: localeOfPopover())
         }
         refreshGlyph()
     }
+
+    private func localeOfPopover() -> AppLocale { AppLocale.current() }
 
     @objc private func submitQuickAdd() {
         let text = quickField.stringValue
@@ -171,16 +173,17 @@ public final class MenuBarController {
 
     @objc private func openSettings() {
         if settingsPanel == nil {
+            let locale = AppLocale.current()
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 320, height: 220),
                 styleMask: [.titled, .closable],
                 backing: .buffered, defer: false)
-            panel.title = "Varal Settings"
+            panel.title = UIStrings.settingsTitle(locale: locale)
             let root = NSStackView(frame: NSRect(x: 16, y: 16, width: 288, height: 188))
             root.orientation = .vertical
             root.spacing = 8
 
-            let displayLabel = NSTextField(labelWithString: "Display:")
+            let displayLabel = NSTextField(labelWithString: UIStrings.displayPickerLabel(locale: locale))
             root.addArrangedSubview(displayLabel)
             let popup = NSPopUpButton()
             popup.tag = 101
@@ -194,7 +197,7 @@ public final class MenuBarController {
             popup.action = #selector(displayChosen(_:))
             root.addArrangedSubview(popup)
 
-            let piecesLabel = NSTextField(labelWithString: "Companion pieces:")
+            let piecesLabel = NSTextField(labelWithString: UIStrings.companionPiecesLabel(locale: locale))
             root.addArrangedSubview(piecesLabel)
             let enabled = Set(UserDefaults.standard.stringArray(forKey: Self.enabledPiecesKey) ?? Self.defaultEnabledPieces)
             for piece in allPieces {

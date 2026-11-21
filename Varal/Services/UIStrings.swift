@@ -59,4 +59,34 @@ public enum UIStrings {
         case .pt: return "Limpar cesto"
         }
     }
+
+    // MARK: - Chrome (correction v1-app2: previously hardcoded English)
+
+    public static func settingsTitle(locale: AppLocale) -> String {
+        switch locale {
+        case .en: return "Varal Settings"
+        case .pt: return "Ajustes do Varal"
+        }
+    }
+
+    public static func displayPickerLabel(locale: AppLocale) -> String {
+        switch locale {
+        case .en: return "Display:"
+        case .pt: return "Tela:"
+        }
+    }
+
+    public static func companionPiecesLabel(locale: AppLocale) -> String {
+        switch locale {
+        case .en: return "Companion pieces:"
+        case .pt: return "Peças companheiras:"
+        }
+    }
+
+    public static func basketCountLabel(count: Int, locale: AppLocale) -> String {
+        switch locale {
+        case .en: return "Basket: \(count)"
+        case .pt: return "Cesto: \(count)"
+        }
+    }
 }

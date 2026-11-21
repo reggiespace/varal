@@ -47,6 +47,16 @@ public enum ClotheslineMath: Sendable {
         0.925 * sag
     }
 
+    /// Cubic-Bezier control-point Y offset that reproduces the spec
+    /// quadratic rope exactly: with C1=(W/3, y+a), C2=(2W/3, y+a), the
+    /// cubic midpoint is y+3a/4; a=(4/3)*0.925*sag keeps the 0.925 mid-span
+    /// deflection the slip layout math assumes (correction v1-app2: the old
+    /// cubic used 0.55*1.85*sag and rendered ~0.76x sag, floating slips
+    /// below the visible rope).
+    public static func ropeCubicControlYOffset(sag: CGFloat) -> CGFloat {
+        (4.0 / 3.0) * midSpanDeflection(sag: sag)
+    }
+
     // MARK: - Tear-off phases (spec §2.4.3)
 
     public enum TearPhase: Equatable, Sendable {
@@ -125,12 +135,73 @@ public enum ClotheslineMath: Sendable {
         size.width >= size.height ? .landscape : .portrait
     }
 
+    /// Top rope anchor. Displays with a menu bar clear it by `menuClearance`
+    /// (correction v1-app2: the legacy `+14` sat the rope right under the
+    /// menu bar on the 3440x1440 display); menu-less displays (e.g. the
+    /// portrait Dell) keep the legacy 38pt anchor pixel-identical.
+    public static let menuClearance: CGFloat = 28
+    public static let legacyLineY: CGFloat = 38
+
     public static func lineY(topSafeInset: CGFloat) -> CGFloat {
-        max(topSafeInset, 24) + 14
+        topSafeInset > 0 ? topSafeInset + menuClearance : legacyLineY
     }
 
     public static func secondLineY(firstLineY: CGFloat) -> CGFloat {
         firstLineY + 235
+    }
+
+    // MARK: - Ultrawide yard rules (correction v1-app2)
+
+    /// Aspect ratio at or above which the landscape yard switches to
+    /// proportional-thirds big-piece placement and width-aware slip layout.
+    /// 21:9 (2.33) and wider qualify; 16:9 (1.78) and portrait do not.
+    public static let ultrawideAspectThreshold: CGFloat = 2.0
+
+    public static func isUltrawide(size: CGSize) -> Bool {
+        layoutMode(size: size) == .landscape
+            && size.height > 0
+            && size.width / size.height >= ultrawideAspectThreshold
+    }
+
+    /// Leading piece center sits at W/3, trailing at 2W/3.
+    public static func thirdsLeadingX(displayWidth: CGFloat, pieceWidth: CGFloat) -> CGFloat {
+        displayWidth / 3 - pieceWidth / 2
+    }
+
+    public static func thirdsTrailingX(displayWidth: CGFloat, pieceWidth: CGFloat) -> CGFloat {
+        2 * displayWidth / 3 - pieceWidth / 2
+    }
+
+    /// Ultrawide cluster step: slips lay side-by-side at full pitch while
+    /// they fit the available span (no overlap); only beyond fit do they
+    /// shingle (collapsed) or compress (expanded).
+    public static func ultrawideClusterStep(
+        slipCount: Int,
+        expanded: Bool,
+        availableWidth: CGFloat
+    ) -> CGFloat {
+        let needed = CGFloat(slipCount) * sideBySidePitch - slipSpacing
+        if needed <= availableWidth { return sideBySidePitch }
+        if !expanded { return shingledStep }
+        return min(sideBySidePitch, availableWidth / max(1, CGFloat(slipCount)))
+    }
+
+    // MARK: - Slot-stable cluster layout (correction v1-app2)
+
+    /// X-origin of each slot `0..<slots.count` relative to the cluster
+    /// start: a uniform `step` grid fixed by `pinSlotIndex`. Tearing a slip
+    /// never moves its neighbors; only the pin graphic at an empty slot
+    /// collapses to the bare 18pt pin pitch. `slots[i] == true` means a
+    /// hanging slip pins there.
+    public static func slotOrigins(slots: [Bool], step: CGFloat) -> [CGFloat] {
+        slots.indices.map { CGFloat($0) * step }
+    }
+
+    /// Full cluster width: the last slot contributes a slip width
+    /// (occupied) or one bare pin pitch (empty).
+    public static func slotTotalWidth(slots: [Bool], origins: [CGFloat]) -> CGFloat {
+        guard let last = slots.indices.last else { return 0 }
+        return origins[last] + (slots[last] ? slipWidth : emptyPinPitch)
     }
 
     // MARK: - Sway
