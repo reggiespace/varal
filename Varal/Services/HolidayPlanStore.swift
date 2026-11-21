@@ -32,8 +32,8 @@ public final class HolidayPlanStore {
         }
     }
 
-    private func save() {
-        guard canPersist else { return }
+    private func save() -> Bool {
+        guard canPersist else { return false }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
@@ -41,8 +41,11 @@ public final class HolidayPlanStore {
             )
             let data = try JSONEncoder().encode(plans)
             try data.write(to: fileURL, options: .atomic)
+            return true
         } catch {
+            canPersist = false
             NSLog("Varal: failed to save holiday_plans.json: \(error)")
+            return false
         }
     }
 
@@ -52,11 +55,16 @@ public final class HolidayPlanStore {
     /// slips. Re-hanging the same plan never duplicates card or slips.
     public func applyWeekendPlan(_ parsed: URLSchemeRouter.WeekendPlan, today: String, now: Date = Date()) {
         guard canPersist else { return }
-        var plan = plans[parsed.planID] ?? VacationPlan(planID: parsed.planID, blocks: [])
+        let previous = plans[parsed.planID]
+        var plan = previous ?? VacationPlan(planID: parsed.planID, blocks: [])
         plan.blocks = parsed.blocks
         plan.updatedAt = now
         plans[parsed.planID] = plan
-        save()
+        guard save() else {
+            if let previous { plans[parsed.planID] = previous }
+            else { plans.removeValue(forKey: parsed.planID) }
+            return
+        }
         syncReminderSlips(today: today, now: now)
     }
 

@@ -239,8 +239,16 @@ public final class ClotheslineCanvasView: NSView {
                 slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth, portraitLine2: false)
         }
-        let pushOut: CGFloat = (mode == .landscape && expanded)
-            ? max(0, (CGFloat(max(hanging.count, 1)) * step - CGFloat(max(hanging.count, 1)) * ClotheslineMath.shingledStep) / 2) : 0
+        var pushOut: CGFloat = (mode == .landscape && expanded)
+            ? max(0, (CGFloat(slots.count) * step - CGFloat(slots.count) * ClotheslineMath.shingledStep) / 2) : 0
+        if pushOut > 0 {
+            let limits = layout.pieceFrames.map { frame in
+                leading.map(\.pieceID).contains(frame.id)
+                    ? frame.frame.minX - 24
+                    : W - 24 - frame.frame.maxX
+            }
+            pushOut = min(pushOut, max(0, limits.min() ?? 0))
+        }
         if expanded, mode == .landscape {
             for i in layout.pieceFrames.indices {
                 let id = layout.pieceFrames[i].id
@@ -270,7 +278,7 @@ public final class ClotheslineCanvasView: NSView {
             x0 = max(x0, leadRight + 8)
             if x0 + totalW > trailLeft - 8 { x0 = trailLeft - 8 - totalW }
         }
-        if !hanging.isEmpty {
+        if !slots.isEmpty {
             let bySlot = Dictionary(uniqueKeysWithValues: hanging.map { ($0.pinSlotIndex, $0) })
             for slot in slots.indices {
                 let x = x0 + origins[slot]
@@ -293,11 +301,9 @@ public final class ClotheslineCanvasView: NSView {
                         ropeY: slipLineY + slipSag * 0.925))
                 }
             }
-            let minX = layout.slipFrames.map(\.frame.minX).min() ?? x0
-            let maxX = layout.slipFrames.map(\.frame.maxX).max() ?? x0
             layout.clusterRect = CGRect(
-                x: min(minX, x0) - 8, y: slipLineY - 24,
-                width: max(maxX, x0 + totalW) - min(minX, x0) + 16, height: 200)
+                x: x0 - 8, y: slipLineY - 24,
+                width: totalW + 16, height: 200)
         }
         return layout
     }
