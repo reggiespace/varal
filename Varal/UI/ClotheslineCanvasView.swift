@@ -484,8 +484,9 @@ public final class ClotheslineCanvasView: NSView {
         if isMotionAllowed {
             flyToBasket(view: view, id: id)
         } else {
-            view.removeFromSuperview()
-            slipViews.removeValue(forKey: id)
+            fade(view: view, id: id, from: view.frame.origin,
+                 to: NSPoint(x: basketView.frame.midX - 40, y: basketView.frame.minY - 10),
+                 duration: 0.2, fadeOut: true)
         }
         refresh()
     }
@@ -518,6 +519,33 @@ public final class ClotheslineCanvasView: NSView {
         }
     }
 
+    private func fade(view: NSView, id: UUID, from: NSPoint, to: NSPoint, duration: TimeInterval, fadeOut: Bool) {
+        let start = Date()
+        view.alphaValue = fadeOut ? 1 : 0
+        flutterTimers[id]?.invalidate()
+        flutterTimers[id] = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                let t = min(1, Date().timeIntervalSince(start) / duration)
+                guard t < 1 else {
+                    self?.flutterTimers[id]?.invalidate()
+                    self?.flutterTimers.removeValue(forKey: id)
+                    if fadeOut {
+                        view.removeFromSuperview()
+                        self?.slipViews.removeValue(forKey: id)
+                    } else {
+                        view.alphaValue = 1
+                    }
+                    self?.refresh()
+                    return
+                }
+                view.setFrameOrigin(NSPoint(
+                    x: from.x + (to.x - from.x) * CGFloat(t),
+                    y: from.y + (to.y - from.y) * CGFloat(t)))
+                view.alphaValue = fadeOut ? 1 - CGFloat(t) : CGFloat(t)
+            }
+        }
+    }
+
     /// Undo: the slip flies back up from the basket and snaps into its
     /// empty clothespin at `pinSlotIndex`, restoring 4.5pt of rope sag.
     private func undoTopSlip() {
@@ -528,6 +556,10 @@ public final class ClotheslineCanvasView: NSView {
         refresh()
         guard let view = slipViews[top.id] else { return }
         let to = view.frame.origin
+        guard isMotionAllowed else {
+            fade(view: view, id: top.id, from: from, to: to, duration: 0.2, fadeOut: false)
+            return
+        }
         view.setFrameOrigin(from)
         view.frameRotation = 0
         let start = Date()
