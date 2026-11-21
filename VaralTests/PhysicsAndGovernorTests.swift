@@ -90,7 +90,12 @@ struct PhysicsAndGovernorTests {
         #expect(ClotheslineMath.clusterStep(slipCount: 2, expanded: false, availableWidth: 900, portraitLine2: false) == 116)
         #expect(ClotheslineMath.clusterStep(slipCount: 6, expanded: false, availableWidth: 900, portraitLine2: false) == 38)
         // Expanded compresses so 10+ slips fit the available span.
-        #expect(ClotheslineMath.clusterStep(slipCount: 10, expanded: true, availableWidth: 900, portraitLine2: false) == 90)
+        let expandedStep = ClotheslineMath.clusterStep(slipCount: 10, expanded: true, availableWidth: 900, portraitLine2: false)
+        #expect(expandedStep == (900 - ClotheslineMath.slipWidth) / 9)
+        #expect(ClotheslineMath.slotTotalWidth(
+            slots: Array(repeating: true, count: 10),
+            origins: ClotheslineMath.slotOrigins(slots: Array(repeating: true, count: 10), step: expandedStep)
+        ) <= 900)
         // Empty-pin pitch collapses freed slots to 18pt.
         #expect(ClotheslineMath.emptyPinPitch == 18)
     }
