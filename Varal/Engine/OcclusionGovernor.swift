@@ -148,7 +148,9 @@ public final class OcclusionGovernor {
         }
         let totalArea = yards.reduce(CGFloat.zero) { $0 + $1.area }
         guard totalArea > 0 else { return 1.0 }
-        let coveredArea = yards.reduce(CGFloat.zero) { $0 + unionArea(windows.map { $0.intersection($1) }) }
+        let coveredArea = yards.reduce(CGFloat.zero) { area, yard in
+            area + unionArea(windows.map { $0.intersection(yard) })
+        }
         return max(0, min(1, 1 - Double(coveredArea / totalArea)))
     }
 

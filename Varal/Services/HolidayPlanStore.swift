@@ -12,6 +12,7 @@ public final class HolidayPlanStore {
     private let fileURL: URL
     private let slipStore: TaskSlipStore
     private let locale: AppLocale
+    private var canPersist = true
     private(set) public var plans: [String: VacationPlan] = [:]
 
     public init(fileURL: URL? = nil, slipStore: TaskSlipStore, locale: AppLocale = .current()) {
@@ -22,13 +23,17 @@ public final class HolidayPlanStore {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([String: VacationPlan].self, from: data)
-        else { return }
-        plans = decoded
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        do {
+            plans = try JSONDecoder().decode([String: VacationPlan].self, from: Data(contentsOf: fileURL))
+        } catch {
+            canPersist = false
+            NSLog("Varal: failed to load holiday_plans.json: \(error)")
+        }
     }
 
     private func save() {
+        guard canPersist else { return }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
@@ -46,6 +51,7 @@ public final class HolidayPlanStore {
     /// Replaces the block list for `planID` in place and re-syncs reminder
     /// slips. Re-hanging the same plan never duplicates card or slips.
     public func applyWeekendPlan(_ parsed: URLSchemeRouter.WeekendPlan, today: String, now: Date = Date()) {
+        guard canPersist else { return }
         var plan = plans[parsed.planID] ?? VacationPlan(planID: parsed.planID, blocks: [])
         plan.blocks = parsed.blocks
         plan.updatedAt = now

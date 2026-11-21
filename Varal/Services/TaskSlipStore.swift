@@ -10,6 +10,7 @@ public final class TaskSlipStore {
     }
 
     private let fileURL: URL
+    private var canPersist = true
     private(set) public var slips: [TaskSlip] = []
 
     public init(fileURL: URL? = nil) {
@@ -20,13 +21,17 @@ public final class TaskSlipStore {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        if let decoded = try? JSONDecoder().decode([TaskSlip].self, from: data) {
-            slips = decoded
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        do {
+            slips = try JSONDecoder().decode([TaskSlip].self, from: Data(contentsOf: fileURL))
+        } catch {
+            canPersist = false
+            NSLog("Varal: failed to load slips.json: \(error)")
         }
     }
 
     private func save() {
+        guard canPersist else { return }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
@@ -34,13 +39,7 @@ public final class TaskSlipStore {
             )
             let data = try JSONEncoder().encode(slips)
             let tmp = fileURL.appendingPathExtension("tmp")
-            try data.write(to: tmp, options: .atomic)
-            // Atomic replace: remove-then-move so a crash never leaves a
-            // half-written slips.json behind.
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                try FileManager.default.removeItem(at: fileURL)
-            }
-            try FileManager.default.moveItem(at: tmp, to: fileURL)
+            try data.write(to: fileURL, options: .atomic)
         } catch {
             NSLog("Varal: failed to save slips.json: \(error)")
         }
