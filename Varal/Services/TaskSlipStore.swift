@@ -95,27 +95,32 @@ public final class TaskSlipStore {
     /// Test seam: pin a fully-formed slip (used by GLW reminder sync).
     public func pin(_ slip: TaskSlip) {
         guard canPersist else { return }
+        let previous = slips
         slips.append(slip)
-        if !save() { slips.removeAll { $0.id == slip.id } }
+        if !save() { slips = previous }
     }
 
     /// Phase C: downward tear-off detaches the slip; the empty clothespin
     /// stays on the line (pinSlotIndex retained) at 18pt bare-pin pitch.
-    public func tearOff(id: UUID, at date: Date = Date()) {
-        guard canPersist else { return }
-        guard let i = slips.firstIndex(where: { $0.id == id }), slips[i].isHanging else { return }
+    @discardableResult
+    public func tearOff(id: UUID, at date: Date = Date()) -> Bool {
+        guard canPersist else { return false }
+        guard let i = slips.firstIndex(where: { $0.id == id }), slips[i].isHanging else { return false }
         let previous = slips
         slips[i].state = .inBasket(completedAt: date)
-        if !save() { slips = previous }
+        guard save() else { slips = previous; return false }
+        return true
     }
 
     /// Undo: drag back from the basket restores `.hanging` at the same slot.
-    public func undoToLine(id: UUID) {
-        guard canPersist else { return }
-        guard let i = slips.firstIndex(where: { $0.id == id }), !slips[i].isHanging else { return }
+    @discardableResult
+    public func undoToLine(id: UUID) -> Bool {
+        guard canPersist else { return false }
+        guard let i = slips.firstIndex(where: { $0.id == id }), !slips[i].isHanging else { return false }
         let previous = slips
         slips[i].state = .hanging
-        if !save() { slips = previous }
+        guard save() else { slips = previous; return false }
+        return true
     }
 
     public func removeSlip(id: UUID) {

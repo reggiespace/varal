@@ -478,7 +478,7 @@ public final class ClotheslineCanvasView: NSView {
 
     private func completeTearOff(id: UUID) {
         guard let view = slipViews[id] else { return }
-        slipStore.tearOff(id: id)
+        guard slipStore.tearOff(id: id) else { return }
         pulls.removeValue(forKey: id)
         engine.tick(dt: 1.0 / 60.0, equilibrium1: equilibrium(forLine: 1, mode: layoutMode), equilibrium2: equilibrium(forLine: 2, mode: layoutMode))
         if isMotionAllowed {
@@ -521,6 +521,7 @@ public final class ClotheslineCanvasView: NSView {
 
     private func fade(view: NSView, id: UUID, from: NSPoint, to: NSPoint, duration: TimeInterval, fadeOut: Bool) {
         let start = Date()
+        view.setFrameOrigin(from)
         view.alphaValue = fadeOut ? 1 : 0
         flutterTimers[id]?.invalidate()
         flutterTimers[id] = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
@@ -551,7 +552,7 @@ public final class ClotheslineCanvasView: NSView {
     private func undoTopSlip() {
         guard let top = slipStore.basketSlips.last else { return }
         let from = NSPoint(x: basketView.frame.midX - 52, y: basketView.frame.minY - 10)
-        slipStore.undoToLine(id: top.id)
+        guard slipStore.undoToLine(id: top.id) else { return }
         engine.tick(dt: 1.0 / 60.0, equilibrium1: equilibrium(forLine: 1, mode: layoutMode), equilibrium2: equilibrium(forLine: 2, mode: layoutMode))
         refresh()
         guard let view = slipViews[top.id] else { return }
