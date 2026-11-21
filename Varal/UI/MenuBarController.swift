@@ -147,7 +147,7 @@ public final class MenuBarController {
     @objc private func submitQuickAdd() {
         let text = quickField.stringValue
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        slipStore.addTask(text)
+        guard slipStore.addTask(text) != nil else { return }
         quickField.stringValue = ""
         rebuildPopover()
         onQuickAdd?()
@@ -157,7 +157,7 @@ public final class MenuBarController {
         // Mini-slip tear-off (>24pt equivalent): immediate in the popover.
         let hanging = slipStore.hangingSlips.sorted(by: { $0.pinSlotIndex < $1.pinSlotIndex })
         let match = hanging.first { $0.id.hashValue == sender.tag }
-        if let match { slipStore.tearOff(id: match.id) }
+        guard let match, slipStore.tearOff(id: match.id) else { return }
         rebuildPopover()
         onQuickAdd?()
     }

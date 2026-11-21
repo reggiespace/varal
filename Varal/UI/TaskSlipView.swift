@@ -169,5 +169,6 @@ public final class TaskSlipView: NSView {
             onPullChanged?(slipID, 0)
         }
         pull = 0
+        needsDisplay = true
     }
 }

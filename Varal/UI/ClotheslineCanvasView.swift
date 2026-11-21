@@ -234,7 +234,7 @@ public final class ClotheslineCanvasView: NSView {
                 slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth)
         } else {
-            availableWidth = max(200, W - 2 * 190)
+            availableWidth = max(200, trailLeft - leadRight - 16)
             step = ClotheslineMath.clusterStep(
                 slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth, portraitLine2: false)
@@ -478,7 +478,12 @@ public final class ClotheslineCanvasView: NSView {
 
     private func completeTearOff(id: UUID) {
         guard let view = slipViews[id] else { return }
-        guard slipStore.tearOff(id: id) else { return }
+        guard slipStore.tearOff(id: id) else {
+            pulls.removeValue(forKey: id)
+            view.frameRotation = 0
+            refresh()
+            return
+        }
         pulls.removeValue(forKey: id)
         engine.tick(dt: 1.0 / 60.0, equilibrium1: equilibrium(forLine: 1, mode: layoutMode), equilibrium2: equilibrium(forLine: 2, mode: layoutMode))
         if isMotionAllowed {

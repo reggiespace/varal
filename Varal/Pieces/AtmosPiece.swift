@@ -47,6 +47,7 @@ public final class AtmosPiece: NSObject, CompanionPiece {
     private var pathMonitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
     private var suspended = false
+    private var enabled = false
     private var snapshotView: NSImageView?
 
     @MainActor public var pieceView: NSView { container }
@@ -56,8 +57,32 @@ public final class AtmosPiece: NSObject, CompanionPiece {
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         container.layer?.cornerRadius = 10
-        buildWebView()
-        observeReachability()
+    }
+
+    public func setEnabled(_ enabled: Bool) {
+        guard enabled != self.enabled else { return }
+        self.enabled = enabled
+        if enabled {
+            buildWebView()
+            observeReachability()
+        } else {
+            pathMonitor?.cancel()
+            pathMonitor = nil
+            if let wakeObserver {
+                NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+                self.wakeObserver = nil
+            }
+            webView?.stopLoading()
+            webView?.navigationDelegate = nil
+            webView?.removeFromSuperview()
+            webView = nil
+            snapshotView?.removeFromSuperview()
+            snapshotView = nil
+            environmentalBroadcast = nil
+            lastGoodSnapshot = nil
+            reloadAttempts = 0
+            suspended = false
+        }
     }
 
     // MARK: - Web view lifecycle
@@ -87,6 +112,7 @@ public final class AtmosPiece: NSObject, CompanionPiece {
     /// snapshot so WebContent/GPU helpers drop to 0% CPU/GPU. Resume reloads.
     /// While suspended the card shows the last `takeSnapshot` still image.
     public func setSuspended(_ suspended: Bool) {
+        guard enabled else { return }
         guard suspended != self.suspended else { return }
         self.suspended = suspended
         if suspended {
@@ -120,10 +146,14 @@ public final class AtmosPiece: NSObject, CompanionPiece {
     }
 
     private func scheduleReload() {
+        guard enabled else { return }
         reloadAttempts += 1
         let delay = min(60, pow(2.0, Double(min(reloadAttempts, 6))))
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            MainActor.assumeIsolated { self?.webView?.load(URLRequest(url: Self.pieceURL)) }
+            MainActor.assumeIsolated {
+                guard let self, self.enabled else { return }
+                self.webView?.load(URLRequest(url: Self.pieceURL))
+            }
         }
     }
 
@@ -146,12 +176,14 @@ public final class AtmosPiece: NSObject, CompanionPiece {
     }
 
     private func reloadIfNeverLoaded() {
+        guard enabled else { return }
         if environmentalBroadcast == nil, let webView = webView, webView.url == nil {
             webView.load(URLRequest(url: Self.pieceURL))
         }
     }
 
     private func noteSnapshot(_ snapshot: EnvironmentSnapshot) {
+        guard enabled else { return }
         environmentalBroadcast = snapshot
         lastGoodSnapshot = (snapshot, Date())
         reloadAttempts = 0

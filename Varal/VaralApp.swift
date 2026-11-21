@@ -30,6 +30,7 @@ final class VaralApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         planStore = HolidayPlanStore(slipStore: slipStore)
         atmosPiece = AtmosPiece()
+        atmosPiece.setEnabled(enabledPieceIDs().contains(atmosPiece.pieceID))
         glwPiece = GetLongWeekendPiece(planStore: planStore)
         allPieces = [atmosPiece, glwPiece]
 
@@ -40,7 +41,10 @@ final class VaralApp: NSObject, NSApplicationDelegate {
             slipStore: slipStore,
             planStore: planStore,
             pieces: { [weak self] in self?.activePieces() ?? [] },
-            environment: { [weak self] in self?.atmosPiece.environmentalBroadcast }
+            environment: { [weak self] in
+                guard let self, self.enabledPieceIDs().contains(self.atmosPiece.pieceID) else { return nil }
+                return self.atmosPiece.environmentalBroadcast
+            }
         )
         self.canvas = canvas
 
@@ -113,12 +117,16 @@ final class VaralApp: NSObject, NSApplicationDelegate {
     // MARK: - Pieces
 
     private func activePieces() -> [any CompanionPiece] {
-        let enabled = UserDefaults.standard.stringArray(forKey: MenuBarController.enabledPiecesKey)
-            ?? MenuBarController.defaultEnabledPieces
-        return CompanionPieces.activePieces(from: allPieces, enabledIDs: enabled)
+        CompanionPieces.activePieces(from: allPieces, enabledIDs: Array(enabledPieceIDs()))
+    }
+
+    private func enabledPieceIDs() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: MenuBarController.enabledPiecesKey)
+            ?? MenuBarController.defaultEnabledPieces)
     }
 
     @objc private func piecesChanged() {
+        atmosPiece.setEnabled(enabledPieceIDs().contains(atmosPiece.pieceID))
         glwPiece.render()
         canvas?.refresh()
     }

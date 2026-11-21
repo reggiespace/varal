@@ -87,7 +87,8 @@ public enum ClotheslineMath: Sendable {
             return sideBySidePitch // 104pt slip + 12pt spacing
         }
         if !expanded { return shingledStep }
-        return min(sideBySidePitch, availableWidth / max(1, CGFloat(slipCount)))
+        guard slipCount > 1 else { return sideBySidePitch }
+        return min(sideBySidePitch, max(0, availableWidth - slipWidth) / CGFloat(slipCount - 1))
     }
 
     // MARK: - Underdamped spring recoil (ω0 = 18 rad/s, ζ = 0.35)
@@ -183,7 +184,8 @@ public enum ClotheslineMath: Sendable {
         let needed = CGFloat(slipCount) * sideBySidePitch - slipSpacing
         if needed <= availableWidth { return sideBySidePitch }
         if !expanded { return shingledStep }
-        return min(sideBySidePitch, availableWidth / max(1, CGFloat(slipCount)))
+        guard slipCount > 1 else { return sideBySidePitch }
+        return min(sideBySidePitch, max(0, availableWidth - slipWidth) / CGFloat(slipCount - 1))
     }
 
     // MARK: - Slot-stable cluster layout (correction v1-app2)
