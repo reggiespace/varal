@@ -44,6 +44,13 @@ public enum UIStrings {
         }
     }
 
+    public static func underwayCountdown(endDate: String, locale: AppLocale) -> String {
+        switch locale {
+        case .en: return "Underway · through \(endDate)"
+        case .pt: return "Em andamento · até \(endDate)"
+        }
+    }
+
     // MARK: - Basket
 
     public static func dayCompleteCaption(doneCount: Int, locale: AppLocale) -> String {

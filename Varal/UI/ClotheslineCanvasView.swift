@@ -44,6 +44,7 @@ public final class ClotheslineCanvasView: NSView {
     private var startTime = Date().timeIntervalSinceReferenceDate
     private var dwellTimer: Timer?
     private var collapseTimer: Timer?
+    private var clusterTrackingArea: NSTrackingArea?
     private var slipViews: [UUID: TaskSlipView] = [:]
     private var pieceViews: [String: NSView] = [:]
     var basketView = LaundryBasketView()
@@ -77,12 +78,6 @@ public final class ClotheslineCanvasView: NSView {
             self?.refresh()
         }
         basketView.onUndoTop = { [weak self] in self?.undoTopSlip() }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self, userInfo: nil
-        )
-        addTrackingArea(area)
     }
 
     @available(*, unavailable)
@@ -319,6 +314,7 @@ public final class ClotheslineCanvasView: NSView {
     /// Rebuilds piece + slip subviews and positions after any store change.
     public func refresh() {
         let layout = computeLayout()
+        updateClusterTrackingArea(layout.clusterRect)
         let pieces = piecesProvider()
 
         // Mount big-piece views (generic: no Atmos/GLW naming here);
@@ -369,6 +365,21 @@ public final class ClotheslineCanvasView: NSView {
 
         publishHitRects(layout: layout)
         needsDisplay = true
+    }
+
+    private func updateClusterTrackingArea(_ rect: CGRect) {
+        if clusterTrackingArea?.rect == rect { return }
+        if let clusterTrackingArea {
+            removeTrackingArea(clusterTrackingArea)
+            self.clusterTrackingArea = nil
+        }
+        guard !rect.isNull, !rect.isEmpty else { return }
+        let area = NSTrackingArea(
+            rect: rect,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self, userInfo: nil)
+        addTrackingArea(area)
+        clusterTrackingArea = area
     }
 
     /// Applies precomputed frames to subviews. Pointer-dragged slips keep

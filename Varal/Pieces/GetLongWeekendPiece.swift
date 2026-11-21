@@ -61,11 +61,15 @@ public final class GetLongWeekendPiece: NSObject, CompanionPiece {
         if let (_, block) = planStore.nextUpcomingBlock(today: today) {
             // State B: Personal Countdown.
             headline.stringValue = locale == .pt ? "Feriad\u{00E3}o" : "Long weekend"
-            let days = HolidayPlanStore.daysUntil(start: block.startDate, from: today) ?? 0
-            let dayWord = locale == .pt ? (days == 1 ? "dia" : "dias") : (days == 1 ? "day" : "days")
-            countdownLabel.stringValue = locale == .pt
-                ? "em \(days) \(dayWord) \u{00B7} \(block.startDate) \u{2013} \(block.endDate)"
-                : "in \(days) \(dayWord) \u{00B7} \(block.startDate) \u{2013} \(block.endDate)"
+            if block.startDate < today {
+                countdownLabel.stringValue = UIStrings.underwayCountdown(endDate: block.endDate, locale: locale)
+            } else {
+                let days = HolidayPlanStore.daysUntil(start: block.startDate, from: today) ?? 0
+                let dayWord = locale == .pt ? (days == 1 ? "dia" : "dias") : (days == 1 ? "day" : "days")
+                countdownLabel.stringValue = locale == .pt
+                    ? "em \(days) \(dayWord) \u{00B7} \(block.startDate) \u{2013} \(block.endDate)"
+                    : "in \(days) \(dayWord) \u{00B7} \(block.startDate) \u{2013} \(block.endDate)"
+            }
             actionButton.title = locale == .pt ? "Ver plano \u{2197}" : "View plan \u{2197}"
         } else {
             // State A: Discovery (static, zero network calls).
