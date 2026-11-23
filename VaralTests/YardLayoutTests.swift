@@ -61,7 +61,7 @@ struct YardLayoutTests {
         #expect(ClotheslineMath.lineY(topSafeInset: 30) == 58)
     }
 
-    // MARK: - Ultrawide gate + thirds (item 2)
+    // MARK: - Ultrawide gate + Option B (fixed gap from central cluster)
 
     @Test("ultrawide gate is aspect-based")
     func ultrawideGate() {
@@ -72,45 +72,64 @@ struct YardLayoutTests {
         #expect(ClotheslineMath.isUltrawide(size: CGSize(width: 1080, height: 1920)) == false)
     }
 
-    @Test("thirds centers pieces at W/3 and 2W/3")
-    func thirdsCenters() {
-        let w: CGFloat = 3440, pw: CGFloat = 170
-        let lx = ClotheslineMath.thirdsLeadingX(displayWidth: w, pieceWidth: pw)
-        let tx = ClotheslineMath.thirdsTrailingX(displayWidth: w, pieceWidth: pw)
-        #expect(abs((lx + pw / 2) - w / 3) < 0.001)
-        #expect(abs((tx + pw / 2) - 2 * w / 3) < 0.001)
-    }
-
-    @Test("3440 yard: thirds pieces, side-by-side slips, no overlap")
-    func ultrawideYard() {
+    @Test("3440 yard: Option B fixed gap from cluster edge, yields outward when expanded")
+    func ultrawideYardOptionB() {
         let (canvas, _) = makeYard()
-        let layout = canvas.computeLayout()
-        let w: CGFloat = 3440
-        // Pieces centered in thirds.
-        let leading = layout.pieceFrames.first { $0.id == "atmos" }!.frame
-        let trailing = layout.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
-        #expect(abs(leading.midX - w / 3) < 0.5)
-        #expect(abs(trailing.midX - 2 * w / 3) < 0.5)
-        // 6 slips at full side-by-side pitch with visible headers.
-        #expect(layout.slipFrames.count == 6)
-        let xs = layout.slipFrames.map(\.frame.minX).sorted()
-        for i in 1..<xs.count {
-            #expect(abs((xs[i] - xs[i - 1]) - ClotheslineMath.sideBySidePitch) < 0.001)
+        let collapsed = canvas.computeLayout()
+        let gap: CGFloat = 24.0
+
+        // Collapsed state: 6 slips shingle at shingledStep (38pt), centered in 3440
+        #expect(collapsed.slipFrames.count == 6)
+        let cXs = collapsed.slipFrames.map(\.frame.minX).sorted()
+        for i in 1..<cXs.count {
+            #expect(abs((cXs[i] - cXs[i - 1]) - 38.0) < 0.001)
         }
-        // Disjoint rects: no overlap.
-        let rects = layout.slipFrames.map(\.frame)
-        for i in rects.indices {
-            for j in rects.indices where j > i {
-                #expect(!rects[i].intersects(rects[j]))
+        let cLeading = collapsed.pieceFrames.first { $0.id == "atmos" }!.frame
+        let cTrailing = collapsed.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        let firstSlipMinX = cXs.first!
+        let lastSlipMaxX = collapsed.slipFrames.map(\.frame.maxX).max()!
+
+        // Each large piece sits at fixed gap (24pt) from the cluster's edge.
+        #expect(abs(firstSlipMinX - cLeading.maxX - gap) < 0.5)
+        #expect(abs(cTrailing.minX - lastSlipMaxX - gap) < 0.5)
+
+        // Expanded state: cluster expands to full pitch (116pt), pieces yield outward
+        canvas.engine.setClusterExpanded(true)
+        let expanded = canvas.computeLayout()
+        #expect(expanded.slipFrames.count == 6)
+        let eXs = expanded.slipFrames.map(\.frame.minX).sorted()
+        for i in 1..<eXs.count {
+            #expect(abs((eXs[i] - eXs[i - 1]) - 116.0) < 0.001)
+        }
+        let eLeading = expanded.pieceFrames.first { $0.id == "atmos" }!.frame
+        let eTrailing = expanded.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        let expFirstSlipMinX = eXs.first!
+        let expLastSlipMaxX = expanded.slipFrames.map(\.frame.maxX).max()!
+
+        // Fixed gap maintained in expanded state as well.
+        #expect(abs(expFirstSlipMinX - eLeading.maxX - gap) < 0.5)
+        #expect(abs(eTrailing.minX - expLastSlipMaxX - gap) < 0.5)
+
+        // Pieces yielded outward along the rope:
+        #expect(eLeading.minX < cLeading.minX)
+        #expect(eTrailing.minX > cTrailing.minX)
+        let clusterGrowth = (expLastSlipMaxX - expFirstSlipMinX) - (lastSlipMaxX - firstSlipMinX)
+        #expect(abs((cLeading.minX - eLeading.minX) - clusterGrowth / 2) < 0.5)
+        #expect(abs((eTrailing.minX - cTrailing.minX) - clusterGrowth / 2) < 0.5)
+
+        // Disjoint rects: no overlap between slips or with pieces.
+        var allRects = expanded.slipFrames.map(\.frame)
+        allRects.append(eLeading)
+        allRects.append(eTrailing)
+        for i in allRects.indices {
+            for j in allRects.indices where j > i {
+                #expect(!allRects[i].intersects(allRects[j]))
             }
         }
         // Slips hang from the rope: tops on the 0.925 deflection line.
-        for f in layout.slipFrames {
-            #expect(abs(f.frame.minY - (layout.line1Y + layout.sag1 * 0.925)) < 0.5)
+        for f in expanded.slipFrames {
+            #expect(abs(f.frame.minY - (expanded.line1Y + expanded.sag1 * 0.925)) < 0.5)
         }
-        // Cluster sits between the thirds pieces with room to spare.
-        #expect(xs.first! > leading.maxX + 8)
-        #expect(xs.last! + ClotheslineMath.slipWidth < trailing.minX - 8)
     }
 
     @Test("1920x1080 and portrait keep legacy geometry")

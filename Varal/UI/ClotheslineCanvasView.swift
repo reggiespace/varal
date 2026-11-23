@@ -38,7 +38,7 @@ public final class ClotheslineCanvasView: NSView {
     private let planStore: HolidayPlanStore
     private let piecesProvider: () -> [any CompanionPiece]
     private let environmentProvider: () -> EnvironmentSnapshot?
-    private let engine = ClotheslinePhysicsEngine()
+    let engine = ClotheslinePhysicsEngine()
 
     private var displayLink: Timer?
     private var startTime = Date().timeIntervalSinceReferenceDate
@@ -148,63 +148,6 @@ public final class ClotheslineCanvasView: NSView {
         let leading = pieces.filter { $0.preferredSide == .leading }
         let trailing = pieces.filter { $0.preferredSide == .trailing }
 
-        // Piece placement: ultrawide centers pieces in the display thirds;
-        // standard and portrait keep the legacy edge anchors pixel-identical.
-        var leadRight: CGFloat = 24
-        var trailLeft: CGFloat = W - 24
-        if mode == .landscape, ultrawide {
-            for piece in leading {
-                let w = piece.sizeMetrics.width
-                layout.pieceFrames.append(.init(
-                    id: piece.pieceID,
-                    frame: NSRect(
-                        x: ClotheslineMath.thirdsLeadingX(displayWidth: W, pieceWidth: w),
-                        y: line1Y, width: w, height: piece.sizeMetrics.height)))
-            }
-            for piece in trailing {
-                let w = piece.sizeMetrics.width
-                layout.pieceFrames.append(.init(
-                    id: piece.pieceID,
-                    frame: NSRect(
-                        x: ClotheslineMath.thirdsTrailingX(displayWidth: W, pieceWidth: w),
-                        y: line1Y, width: w, height: piece.sizeMetrics.height)))
-            }
-        } else {
-            var xLead: CGFloat = 24
-            for piece in leading {
-                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
-                layout.pieceFrames.append(.init(
-                    id: piece.pieceID,
-                    frame: NSRect(x: xLead, y: line1Y, width: w, height: h)))
-                xLead += w + 16
-            }
-            var xTrail: CGFloat = W - 24
-            for piece in trailing.reversed() {
-                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
-                xTrail -= w
-                layout.pieceFrames.append(.init(
-                    id: piece.pieceID,
-                    frame: NSRect(x: xTrail, y: line1Y, width: w, height: h)))
-                xTrail -= 16
-            }
-        }
-        if ultrawide {
-            leadRight = layout.pieceFrames
-                .filter { leading.map(\.pieceID).contains($0.id) }
-                .map(\.frame.maxX).max() ?? 24
-            trailLeft = layout.pieceFrames
-                .filter { trailing.map(\.pieceID).contains($0.id) }
-                .map(\.frame.minX).min() ?? W - 24
-        } else if mode == .landscape {
-            leadRight = layout.pieceFrames
-                .filter { leading.map(\.pieceID).contains($0.id) }
-                .map(\.frame.maxX).max() ?? 24
-            trailLeft = layout.pieceFrames
-                .filter { trailing.map(\.pieceID).contains($0.id) }
-                .map(\.frame.minX).min() ?? W - 24
-        }
-
-        // Cluster expansion pushes shared-rope pieces toward the edges.
         let hanging = slipStore.hangingSlips.sorted { $0.pinSlotIndex < $1.pinSlotIndex }
         let inBasketSlots = Set(slipStore.basketSlips.map(\.pinSlotIndex))
         let maxSlot = (hanging.map(\.pinSlotIndex) + inBasketSlots).max() ?? -1
@@ -216,6 +159,100 @@ public final class ClotheslineCanvasView: NSView {
         let slipLineY = (mode == .portrait) ? line2Y : line1Y
         let slipSag = (mode == .portrait) ? sag2 : sag1
 
+        if mode == .landscape, ultrawide {
+            // Option B: each large piece sits at a fixed gap from the central cluster's edge,
+            // and the pieces yield outward along the rope when the cluster expands.
+            let totalLeadW = leading.map(\.sizeMetrics.width).reduce(0, +) + max(0, CGFloat(leading.count - 1) * 16)
+            let totalTrailW = trailing.map(\.sizeMetrics.width).reduce(0, +) + max(0, CGFloat(trailing.count - 1) * 16)
+            let maxClusterWidth = max(200, W - 48 - totalLeadW - totalTrailW - 2 * ClotheslineMath.ultrawideClusterGap)
+            let step = ClotheslineMath.clusterStep(
+                slipCount: slots.count, expanded: expanded,
+                availableWidth: maxClusterWidth, portraitLine2: false)
+
+            let origins = ClotheslineMath.slotOrigins(slots: slots, step: step)
+            let totalW = ClotheslineMath.slotTotalWidth(slots: slots, origins: origins)
+            let x0 = (W - totalW) / 2
+            let clusterLeft = x0
+            let clusterRight = x0 + totalW
+
+            var leadingFrames: [YardLayout.PieceFrame] = []
+            var right = clusterLeft - ClotheslineMath.ultrawideClusterGap
+            for piece in leading.reversed() {
+                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+                let x = max(24, right - w)
+                leadingFrames.append(.init(id: piece.pieceID, frame: NSRect(x: x, y: line1Y, width: w, height: h)))
+                right = x - 16
+            }
+            layout.pieceFrames.append(contentsOf: leadingFrames.reversed())
+
+            var left = clusterRight + ClotheslineMath.ultrawideClusterGap
+            for piece in trailing {
+                let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+                let x = min(W - 24 - w, left)
+                layout.pieceFrames.append(.init(id: piece.pieceID, frame: NSRect(x: x, y: line1Y, width: w, height: h)))
+                left = x + w + 16
+            }
+
+            if !slots.isEmpty {
+                let bySlot = Dictionary(uniqueKeysWithValues: hanging.map { ($0.pinSlotIndex, $0) })
+                for slot in slots.indices {
+                    let x = x0 + origins[slot]
+                    let pull = bySlot[slot].flatMap { pulls[$0.id] } ?? 0
+                    let ropeDip = pull <= 18 ? 0.45 * pull : 0.45 * 18
+                    if let slip = bySlot[slot] {
+                        layout.slipFrames.append(.init(
+                            id: slip.id, slot: slot,
+                            frame: NSRect(
+                                x: x, y: slipLineY + slipSag * 0.925 + ropeDip,
+                                width: ClotheslineMath.slipWidth,
+                                height: ClotheslineMath.slipHeight)))
+                        layout.occupiedPinRects.append(pinRect(
+                            slotX: x, slotWidth: ClotheslineMath.slipWidth,
+                            ropeY: slipLineY + slipSag * 0.925))
+                    } else {
+                        layout.emptyPinRects.append(pinRect(
+                            slotX: x, slotWidth: ClotheslineMath.slipWidth,
+                            ropeY: slipLineY + slipSag * 0.925))
+                    }
+                }
+                layout.clusterRect = CGRect(
+                    x: x0 - 8, y: slipLineY - 24,
+                    width: totalW + 16, height: 200)
+            }
+            return layout
+        }
+
+        // Piece placement for standard landscape and portrait:
+        // keeps the legacy edge anchors pixel-identical.
+        var xLead: CGFloat = 24
+        for piece in leading {
+            let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+            layout.pieceFrames.append(.init(
+                id: piece.pieceID,
+                frame: NSRect(x: xLead, y: line1Y, width: w, height: h)))
+            xLead += w + 16
+        }
+        var xTrail: CGFloat = W - 24
+        for piece in trailing.reversed() {
+            let w = piece.sizeMetrics.width, h = piece.sizeMetrics.height
+            xTrail -= w
+            layout.pieceFrames.append(.init(
+                id: piece.pieceID,
+                frame: NSRect(x: xTrail, y: line1Y, width: w, height: h)))
+            xTrail -= 16
+        }
+
+        var leadRight: CGFloat = 24
+        var trailLeft: CGFloat = W - 24
+        if mode == .landscape {
+            leadRight = layout.pieceFrames
+                .filter { leading.map(\.pieceID).contains($0.id) }
+                .map(\.frame.maxX).max() ?? 24
+            trailLeft = layout.pieceFrames
+                .filter { trailing.map(\.pieceID).contains($0.id) }
+                .map(\.frame.minX).min() ?? W - 24
+        }
+
         let step: CGFloat
         let availableWidth: CGFloat
         if mode == .portrait {
@@ -223,17 +260,13 @@ public final class ClotheslineCanvasView: NSView {
             step = ClotheslineMath.clusterStep(
                 slipCount: slots.count, expanded: expanded,
                 availableWidth: max(200, availableWidth), portraitLine2: true)
-        } else if ultrawide {
-            availableWidth = max(200, trailLeft - leadRight - 16)
-            step = ClotheslineMath.ultrawideClusterStep(
-                slipCount: slots.count, expanded: expanded,
-                availableWidth: availableWidth)
         } else {
             availableWidth = max(200, trailLeft - leadRight - 16)
             step = ClotheslineMath.clusterStep(
                 slipCount: slots.count, expanded: expanded,
                 availableWidth: availableWidth, portraitLine2: false)
         }
+
         var pushOut: CGFloat = (mode == .landscape && expanded)
             ? max(0, (CGFloat(slots.count) * step - CGFloat(slots.count) * ClotheslineMath.shingledStep) / 2) : 0
         if pushOut > 0 {
@@ -252,17 +285,12 @@ public final class ClotheslineCanvasView: NSView {
                 else { f.origin.x += pushOut }
                 layout.pieceFrames[i] = .init(id: id, frame: f)
             }
-            if !ultrawide {
-                leadRight = layout.pieceFrames
-                    .filter { leading.map(\.pieceID).contains($0.id) }
-                    .map(\.frame.maxX).max() ?? 24
-                trailLeft = layout.pieceFrames
-                    .filter { trailing.map(\.pieceID).contains($0.id) }
-                    .map(\.frame.minX).min() ?? W - 24
-            } else {
-                leadRight -= pushOut
-                trailLeft += pushOut
-            }
+            leadRight = layout.pieceFrames
+                .filter { leading.map(\.pieceID).contains($0.id) }
+                .map(\.frame.maxX).max() ?? 24
+            trailLeft = layout.pieceFrames
+                .filter { trailing.map(\.pieceID).contains($0.id) }
+                .map(\.frame.minX).min() ?? W - 24
         }
 
         // Slot-stable slip positions + pin rects.
