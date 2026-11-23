@@ -16,11 +16,11 @@ The before/after captures below were rendered offscreen from the app layout at t
 ### Already resolved in main
 
 - **review-4:** Tearing a slip preserves its clothespin and neighboring positions; `ClotheslineCanvasView.swift` tear handling leaves slot geometry stable, covered by `tearLeavesPinWithoutShifting`.
-- **review-5:** During downward drag the slip follows the pointer until the 48 pt tear threshold; `TaskSlipView.swift` drag tracking is covered by `dragPointerFollowing`.
-- **review-6:** Basket undo requires an upward drag; `LaundryBasketView.swift` handles the drag gesture, covered by `basketClickDoesNothingDragUndoes`.
+- **review-5:** During downward drag the slip follows the pointer until the 48 pt tear threshold; `TaskSlipView.swift` drag tracking is covered by `dragFollowsPointer`.
+- **review-6:** Basket undo requires an upward drag; `LaundryBasketView.swift` handles the drag gesture, covered by `basketDragOnlyUndo`.
 - **review-10:** Atmos suspends WKWebView rendering and timer updates on non-visible spaces while displaying its static snapshot; `AtmosPiece.swift` suspension path implements this behavior.
 - **review-13:** English and Portuguese UI chrome strings are present in `UIStrings.swift` and used by `MenuBarController.swift`; covered by `menuBarAndSettingsStringsBilingual`.
-- **review-14:** Clicking the laundry basket does not undo; `LaundryBasketView.swift` click handling is a no-op, covered by `basketClickDoesNothingDragUndoes`.
+- **review-14:** Clicking the laundry basket does not undo; `LaundryBasketView.swift` click handling is a no-op, covered by `basketDragOnlyUndo`.
 
 ### Fixed now
 
