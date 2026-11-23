@@ -8,12 +8,9 @@
 
 ## Global Spatial Grid & Window Level Contract
 
-* **macOS Window Level, Display Selection & Portrait Mode:** `CGWindowLevelForKey(.desktopIconWindow) - 1` on a single display chosen by the user in Settings (default: main display; no mirroring, no second instance). The menu bar and `NSStatusItem` remain on the main display, while the clothesline anchors to the top of the chosen display with a safe margin (`max(topSafeInset, 24pt) + 14pt`). On tall/narrow displays (`height > width`), **Portrait Layout Mode** stacks two parallel clotheslines vertically (Line 1 for big companion pieces, Line 2 for small task slips), keeping the basket at the bottom of the screen so torn slips flutter down the full vertical drop. The Occlusion & Power Governor evaluates window coverage on the chosen display only.
+* **Window Level, Display Selection & Portrait Mode:** For the current window level and top-anchor contract, see [the finalized design §2.2](varal.md#22-desktop-window-management-display-selection--portrait-layout-mode). Varal remains on one user-selected display; on portrait displays (`height > width`), **Portrait Layout Mode** stacks two parallel clotheslines vertically (Line 1 for big companion pieces, Line 2 for small task slips), with the basket at the bottom. The Occlusion & Power Governor evaluates window coverage on the chosen display only.
 * **Screen Anchor & Catenary Line:**
-  * Left anchor: `(x: 0, y: menuBarHeight + 14pt)`
-  * Right anchor: `(x: screenWidth, y: menuBarHeight + 14pt)`
-  * Catenary quadratic Bezier control point: `(cx: screenWidth / 2, cy: menuBarHeight + 14pt + 1.85 * Δy_sag)` (producing a mid-span curve deflection of `0.925 * Δy_sag`)
-  * Dynamic sag formula (clamped to `54pt` max): `Δy_sag = min(54pt, baseSag(8pt) + (bigCardCount * 6pt) + (activeSlipCount * 4.5pt) + moistureWeight(0..8pt))`
+  * For the current anchor, rendered curve, and sag formula, see [the finalized design §§2.2 and 2.4.1](varal.md#22-desktop-window-management-display-selection--portrait-layout-mode).
 * **Zero-Notification Invariant:** No `UNUserNotificationCenter` permissions, no Dock icon (`LSUIElement = true`), no red badges, no modal alerts, no sounds. All state is passive and visual on the clothesline.
 * **Accessibility Rule (Reduce Motion):** When macOS **Reduce Motion** (`NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`) is enabled, Varal automatically pauses all wind sway and weather particles—identical in behavior to toggling **Pause Breeze**.
 * **Immutable Paper & Rollover Weathering:** Task slips are immutable paper (no inline editing; to fix a typo, tear the slip off and pin a new one). Tearing is the *only* completion verb: unfinished slips remain on the line after the `04:00 AM` rollover with slightly weathered paper edges.
