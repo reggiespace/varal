@@ -1,6 +1,6 @@
 # Varal ultrawide Option B evidence
 
-The before/after captures below were rendered offscreen from the app layout at the named display dimensions; they are not photographs of a physical display. `before` is the proportional-thirds layout and `after` is Option B. At 3440×1440, collapsed and expanded states show a 24 pt gap from each large piece to the cluster, with both pieces yielding outward as the cluster expands. The expanded before and after captures show the same six expanded task slips at full 116 pt pitch, spanning x=1378 to x=2062, for a like-for-like comparison. At 1920×1080, collapsed and expanded layout coordinates are identical before and after: Atmos minX 24 pt and Get Long Weekend minX 1726 pt.
+The before/after captures below were rendered offscreen from the app layout at the named display dimensions; they are not photographs of a physical display. `before` is the proportional-thirds layout from PR #2 main and `after` is Option B. At 3440×1440, both expanded captures show the same six task slips at full 116 pt pitch, centered from x=1378 to x=2062. In the before layout (Option C), the expanded cluster leaves a 380.3 pt gap to each large piece, whose centers are at W/3 and 2W/3; as the cluster expands, the pieces yield outward to x=827.7 and x=2442.3. In the after layout, the pieces sit at a fixed 24 pt gap from the cluster edges, at x=1184 and x=2086. At 1920×1080, collapsed and expanded layout coordinates are identical before and after: Atmos minX 24 pt and Get Long Weekend minX 1726 pt.
 
 ## Captures
 

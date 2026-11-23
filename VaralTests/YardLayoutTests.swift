@@ -76,13 +76,13 @@ struct YardLayoutTests {
     func ultrawideYardOptionB() {
         let (canvas, _) = makeYard()
         let collapsed = canvas.computeLayout()
-        let gap = ClotheslineMath.ultrawideClusterGap
+        let gap: CGFloat = 24.0
 
         // Collapsed state: 6 slips shingle at shingledStep (38pt), centered in 3440
         #expect(collapsed.slipFrames.count == 6)
         let cXs = collapsed.slipFrames.map(\.frame.minX).sorted()
         for i in 1..<cXs.count {
-            #expect(abs((cXs[i] - cXs[i - 1]) - ClotheslineMath.shingledStep) < 0.001)
+            #expect(abs((cXs[i] - cXs[i - 1]) - 38.0) < 0.001)
         }
         let cLeading = collapsed.pieceFrames.first { $0.id == "atmos" }!.frame
         let cTrailing = collapsed.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
@@ -99,7 +99,7 @@ struct YardLayoutTests {
         #expect(expanded.slipFrames.count == 6)
         let eXs = expanded.slipFrames.map(\.frame.minX).sorted()
         for i in 1..<eXs.count {
-            #expect(abs((eXs[i] - eXs[i - 1]) - ClotheslineMath.sideBySidePitch) < 0.001)
+            #expect(abs((eXs[i] - eXs[i - 1]) - 116.0) < 0.001)
         }
         let eLeading = expanded.pieceFrames.first { $0.id == "atmos" }!.frame
         let eTrailing = expanded.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
