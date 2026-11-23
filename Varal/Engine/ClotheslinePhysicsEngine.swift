@@ -168,18 +168,6 @@ public enum ClotheslineMath: Sendable {
     /// Fixed gap between each large piece and the central cluster's edge (Option B).
     public static let ultrawideClusterGap: CGFloat = 24
 
-    /// Leading piece X origin for Option B ultrawide placement:
-    /// sits at `gap` to the left of the cluster's left edge.
-    public static func ultrawideLeadingX(clusterLeft: CGFloat, pieceWidth: CGFloat, gap: CGFloat = ultrawideClusterGap) -> CGFloat {
-        clusterLeft - gap - pieceWidth
-    }
-
-    /// Trailing piece X origin for Option B ultrawide placement:
-    /// sits at `gap` to the right of the cluster's right edge.
-    public static func ultrawideTrailingX(clusterRight: CGFloat, gap: CGFloat = ultrawideClusterGap) -> CGFloat {
-        clusterRight + gap
-    }
-
     // MARK: - Slot-stable cluster layout (correction v1-app2)
 
     /// X-origin of each slot `0..<slots.count` relative to the cluster

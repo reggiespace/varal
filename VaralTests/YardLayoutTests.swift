@@ -72,17 +72,6 @@ struct YardLayoutTests {
         #expect(ClotheslineMath.isUltrawide(size: CGSize(width: 1080, height: 1920)) == false)
     }
 
-    @Test("ultrawide Option B math places pieces at fixed gap from cluster edges")
-    func ultrawideOptionBMath() {
-        let gap = ClotheslineMath.ultrawideClusterGap
-        #expect(gap == 24)
-        let cLeft: CGFloat = 1573, cRight: CGFloat = 1867, pw: CGFloat = 170
-        let lx = ClotheslineMath.ultrawideLeadingX(clusterLeft: cLeft, pieceWidth: pw, gap: gap)
-        let tx = ClotheslineMath.ultrawideTrailingX(clusterRight: cRight, gap: gap)
-        #expect(cLeft - (lx + pw) == gap)
-        #expect(tx - cRight == gap)
-    }
-
     @Test("3440 yard: Option B fixed gap from cluster edge, yields outward when expanded")
     func ultrawideYardOptionB() {
         let (canvas, _) = makeYard()
