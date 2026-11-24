@@ -152,7 +152,7 @@
 * **Visual Hierarchy:**
   1. **Foreground Application Window (`NSNormalWindowLevel`):** Completely occludes the center of the clothesline. Varal *never* floats above or steals focus from the browser window.
   2. **Peripheral Margins:** The left edge of **Atmos**, the far-right anchor of the rope, and the bottom-right **Laundry Basket** remain quietly visible in the desktop margins.
-  3. **Menu-Bar Popover (`NSPopover` from `NSStatusItem`):** Invoked explicitly by clicking the `[⊶3]` clothesline glyph in the macOS menu bar.
+  3. **Menu-Bar Popover (`NSPopover` from `NSStatusItem`):** Invoked explicitly by clicking the menu-bar status item; `[⊶3]` is the wireframe's illustrative placeholder.
 * **What Moves and Why:**
   * **Occlusion Governor Activation:** Because `>85%` of the center task cluster is behind the opaque Safari window, the desktop window's `CADisplayLink` drops from `60fps` to `0fps` (static resting state) until the popover is opened or the browser window is moved/minimized.
   * **Mini-Line Popover Physics:** Inside the `260×310pt` popover, a miniature vector clothesline sways gently at the top, mirroring the exact count of pins and cards on the desktop.
