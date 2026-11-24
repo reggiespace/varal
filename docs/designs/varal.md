@@ -30,7 +30,7 @@ Three types of items hang from the clothesline on clothespins and respond to one
    * **State B (Personal Countdown):** When the user selects their vacation blocks on `getlongweekend.ca` and triggers `"Hang on Varal"` (`varal://weekend?start=...&end=...&plan=...`), Varal switches the card idempotently into a personal countdown to the next upcoming vacation block in the plan. As each block approaches, the card pins a physical tear-off reminder slip (such as a PTO request reminder) onto the clothesline without triggering a notification. Re-hanging the same `plan` updates the card and its slips idempotently without duplication.
 3. **Daily Task Slips (Small Pieces — 1 Clothespin Each, Center Cluster):** Individual DayPad-inspired paper slips showing a time and a short title. Slips are immutable paper with no checkboxes and no inline text editing. Their layout and gestures are specified in [§2.4](#24-shared-physics-cluster-ergonomics--tear-off-gestures). Tearing is the only completion verb: unfinished slips remain on the line past the `04:00 AM` rollover with slightly weathered paper edges.
 
-Because application windows cover the desktop during normal work, a menu-bar icon (`NSStatusItem`) renders a micro-silhouette of the line and opens a popover containing a mini clothesline mirror, a quick-add task input, interactive mini-slip tear-off, and a **Pause Breeze** toggle. Varal never requests notification permissions, never displays badges, and never interrupts the user.
+Because application windows cover the desktop during normal work, a menu-bar clothesline template icon and live slip count (`NSStatusItem`) open a popover containing a mini clothesline mirror, a quick-add task input, interactive mini-slip tear-off, and a **Pause Breeze** toggle. When the image is available, the status item uses the accessible label `Varal, N slips`; if its image resource is unavailable, it falls back to the text glyph `[⊶ N]`. Varal never requests notification permissions, never displays badges, and never interrupts the user.
 
 ### 1.3 Goals
 
@@ -102,7 +102,7 @@ Varal is structured as a menu-bar-anchored macOS application (`LSUIElement = tru
                    v                                                             v
 +--------------------------------------------------+   +--------------------------------------------+
 | DesktopYardWindow (Chosen Display Only)          |   | MenuBarController (Main Display Menu Bar)  |
-| - Finder desktop-level window (see §2.2)          |   | - Live micro-line glyph [⊶ N]              |
+| - Finder desktop-level window (see §2.2)          |   | - Template icon + live slip count          |
 | - Dynamic Hit-Test Mask (ignoresMouseEvents)     |   | - Mini Clothesline Mirror                  |
 | - Landscape (1 line) or Portrait (2 lines)       |   | - Quick-Add immutable task input           |
 | - Bottom Laundry Basket (cesto)                  |   | - Mini-slip tear-off & Pause Breeze toggle |
@@ -406,7 +406,7 @@ This unified implementation plan enumerates every file created or updated across
 21. **[Varal/UI/LaundryBasketView.swift](../../Varal/UI/LaundryBasketView.swift)** *(Create)*
     * **Rationale:** Renders the bottom-right `cesto`, displays stacked completed slips and the `"Dia concluído"` caption when all active slips are torn off, handles drag-up undo back to the slip's preserved `pinSlotIndex` clothespin on the line, and provides the manual `[Limpar cesto]` deletion action. Correction v1-app2: undo is drag-up `>60pt` only; a click does nothing.
 22. **[Varal/UI/MenuBarController.swift](../../Varal/UI/MenuBarController.swift)** *(Create)*
-    * **Rationale:** Manages the `NSStatusItem` on the main display's menu bar (rendering the live `[⊶ N]` micro-line glyph) and its `NSPopover` containing the Mini Clothesline mirror (driven by `isPopoverSimulationActive`), quick-add task field, interactive mini-slip tear-off, **Pause Breeze** toggle, and Settings sheet (Display picker for choosing the single target screen + on/off checkboxes for built-in `CompanionPiece` modules). Correction v1-app2: Settings title, Display label, companion-pieces label, and basket count are bilingual EN/PT via `UIStrings`.
+    * **Rationale:** Manages the `NSStatusItem` on the main display's menu bar (rendering the template clothesline icon beside the live slip count, with a text-glyph fallback if the image resource is unavailable) and its `NSPopover` containing the Mini Clothesline mirror (driven by `isPopoverSimulationActive`), quick-add task field, interactive mini-slip tear-off, **Pause Breeze** toggle, and Settings sheet (Display picker for choosing the single target screen + on/off checkboxes for built-in `CompanionPiece` modules). Correction v1-app2: Settings title, Display label, companion-pieces label, and basket count are bilingual EN/PT via `UIStrings`.
 
 ### 4.6 Verification & Unit Tests (`VaralTests/`)
 

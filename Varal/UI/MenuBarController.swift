@@ -1,6 +1,6 @@
 import AppKit
 
-/// Menu-bar presence on the main display: live `[⊶ N]` micro-line glyph +
+/// Menu-bar presence on the main display: live clothesline glyph with slip count +
 /// `NSPopover` with the mini clothesline mirror, quick-add input, mini-slip
 /// tear-off, Pause Breeze toggle, and Settings (display picker + pieces).
 @MainActor
@@ -55,9 +55,20 @@ public final class MenuBarController {
     }
 
     public func refreshGlyph() {
-        // Live micro-silhouette: [⊶ N] ticks = hanging slips on the line.
+        guard let button = statusItem?.button else { return }
         let n = slipStore.hangingSlips.count
-        statusItem?.button?.title = "[⊶ \(n)]"
+        if let image = NSImage(named: NSImage.Name("MenuBarIconTemplate")) {
+            image.isTemplate = true
+            image.size = NSSize(width: 14, height: 16)
+            button.image = image
+            button.imagePosition = .imageLeading
+            button.title = "\(n)"
+            button.setAccessibilityLabel("Varal, \(n) slips")
+        } else {
+            button.image = nil
+            button.title = "[⊶ \(n)]"
+            button.setAccessibilityLabel(nil)
+        }
     }
 
     @objc private func togglePopover() {
