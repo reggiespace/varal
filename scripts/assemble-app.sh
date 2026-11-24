@@ -23,6 +23,8 @@ rm -rf "$DEST"
 mkdir -p "$DEST/Contents/MacOS" "$DEST/Contents/Resources"
 cp "$BIN" "$DEST/Contents/MacOS/Varal"
 cp "$ROOT/Varal/Info.plist" "$DEST/Contents/Info.plist"
+cp "$ROOT/logos/app-icon/Varal.icns" "$DEST/Contents/Resources/Varal.icns"
+cp "$ROOT"/logos/menu-bar/MenuBarIconTemplate*.png "$DEST/Contents/Resources/"
 
 # Registration check (informational; lsregister may be unavailable in CI).
 if command -v lsregister >/dev/null 2>&1; then
