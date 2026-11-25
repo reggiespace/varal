@@ -69,6 +69,15 @@ struct LineDragTests {
         #expect(LineDrag.pieceSlideStarts(dx: 4, dy: 4.5) == true)
     }
 
+    @Test("menu mirror uses any-direction piece slides and horizontal slip slides")
+    func menuMirrorSlideRules() {
+        #expect(LineDrag.menuSlideStarts(isPiece: true, dx: 0, dy: 6))
+        #expect(LineDrag.menuSlideStarts(isPiece: true, dx: 4, dy: 5))
+        #expect(LineDrag.menuSlideStarts(isPiece: false, dx: 6, dy: 0))
+        #expect(!LineDrag.menuSlideStarts(isPiece: false, dx: 0, dy: 6))
+        #expect(!LineDrag.menuSlideStarts(isPiece: false, dx: 4, dy: 5))
+    }
+
     @Test("a sideways slip drag slides and never tears, however far it goes")
     func sidewaysNeverTears() {
         let view = TaskSlipView(slip: TaskSlip(timeLabel: "09:30", title: "Gym", createdAt: Date(), pinSlotIndex: 0))

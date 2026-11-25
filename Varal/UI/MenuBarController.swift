@@ -377,8 +377,15 @@ final class MiniLineView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         if dragItem == nil {
-            guard let pressItem, abs(p.x - startX) >= 2 * abs(p.y - startY),
-                  LineDrag.pieceSlideStarts(dx: p.x - startX, dy: p.y - startY) else { return }
+            guard let pressItem else { return }
+            let dx = p.x - startX
+            let dy = p.y - startY
+            switch pressItem {
+            case .piece:
+                guard LineDrag.menuSlideStarts(isPiece: true, dx: dx, dy: dy) else { return }
+            case .slip:
+                guard LineDrag.menuSlideStarts(isPiece: false, dx: dx, dy: dy) else { return }
+            }
             dragItem = pressItem
         }
         dx = p.x - startX
