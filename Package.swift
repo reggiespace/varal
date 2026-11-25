@@ -1,5 +1,15 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let distPath = packageDir.appendingPathComponent("dist").path
+
+/// Repo files that belong to no target (both targets are rooted at ".").
+var nonSourceFiles = ["README.md", "docs", "logos", "scripts"]
+if FileManager.default.fileExists(atPath: distPath) {
+    nonSourceFiles.append("dist")
+}
 
 let package = Package(
     name: "Varal",
@@ -10,6 +20,7 @@ let package = Package(
         .target(
             name: "VaralKit",
             path: ".",
+            exclude: nonSourceFiles + ["Varal/Info.plist", "Varal/VaralApp.swift", "VaralTests"],
             sources: [
                 "Varal/Contracts/CompanionPiece.swift",
                 "Varal/Models/TaskSlip.swift",
@@ -20,6 +31,8 @@ let package = Package(
                 "Varal/Services/RolloverScheduler.swift",
                 "Varal/Services/UIStrings.swift",
                 "Varal/Engine/ClotheslinePhysicsEngine.swift",
+                "Varal/Engine/YardGeometry.swift",
+                "Varal/Services/PieceOrderStore.swift",
                 "Varal/Engine/OcclusionGovernor.swift",
                 "Varal/Pieces/AtmosPiece.swift",
                 "Varal/Pieces/GetLongWeekendPiece.swift",
@@ -34,7 +47,11 @@ let package = Package(
             name: "Varal",
             dependencies: ["VaralKit"],
             path: ".",
-            exclude: ["Varal/Info.plist"],
+            exclude: nonSourceFiles + [
+                "Varal/Info.plist", "VaralTests",
+                "Varal/Contracts", "Varal/Engine", "Varal/Models",
+                "Varal/Pieces", "Varal/Services", "Varal/UI",
+            ],
             sources: ["Varal/VaralApp.swift"],
             linkerSettings: [
                 .unsafeFlags([

@@ -10,12 +10,8 @@ public enum RolloverScheduler {
     /// i.e. a 04:00 AM instant exists in `(lastCheck, now]`.
     public static func shouldRoll(lastCheck: Date, now: Date, calendar: Calendar = .current) -> Bool {
         guard now > lastCheck else { return false }
-        var cursor = lastCheck
-        while true {
-            guard let next = nextRollover(after: cursor, calendar: calendar) else { return false }
-            if next <= now { return true }
-            return false
-        }
+        guard let next = nextRollover(after: lastCheck, calendar: calendar) else { return false }
+        return next <= now
     }
 
     /// Next 04:00 AM strictly after `date`.

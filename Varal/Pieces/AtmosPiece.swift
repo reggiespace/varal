@@ -219,7 +219,7 @@ extension AtmosPiece: WKScriptMessageHandler {
 // MARK: - WKNavigationDelegate (same-origin lock + crash recovery)
 
 extension AtmosPiece: WKNavigationDelegate {
-    public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         if let host = navigationAction.request.url?.host, host == Self.host {
             decisionHandler(.allow)
         } else if navigationAction.request.url?.scheme == "about" {

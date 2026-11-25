@@ -38,6 +38,7 @@ public enum GovernorCore: Sendable {
     }
 }
 
+@MainActor
 public final class OcclusionGovernor {
     public var isUserBreezePaused = false {
         didSet { refresh(liveInputs: liveInputs) }
@@ -70,13 +71,13 @@ public final class OcclusionGovernor {
         observers.append(center.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil, queue: .main
-        ) { [weak self] _ in self?.refreshLive() })
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.refreshLive() } })
         observers.append(center.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main
-        ) { [weak self] _ in self?.refreshLive() })
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.refreshLive() } })
         timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.refreshLive()
+            MainActor.assumeIsolated { self?.refreshLive() }
         }
         refreshLive()
     }

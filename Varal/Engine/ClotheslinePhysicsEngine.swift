@@ -151,11 +151,12 @@ public enum ClotheslineMath: Sendable {
         firstLineY + 235
     }
 
-    // MARK: - Ultrawide yard rules (Option B)
+    // MARK: - Ultrawide slip rule (Option B / correction v1-app2)
 
-    /// Aspect ratio at or above which the landscape yard switches to
-    /// Option B: large pieces sit at a fixed gap from the central cluster's
-    /// edge and yield outward along the rope when the cluster expands.
+    /// Aspect ratio at or above which the landscape yard lays slips
+    /// side-by-side while they fit (width-aware slip layout). Big-piece
+    /// placement no longer depends on it: every landscape width uses the
+    /// fixed-gap rule (`YardGeometry.landscapeStacks`).
     /// 21:9 (2.33) and wider qualify; 16:9 (1.78) and portrait do not.
     public static let ultrawideAspectThreshold: CGFloat = 2.0
 
@@ -167,6 +168,21 @@ public enum ClotheslineMath: Sendable {
 
     /// Fixed gap between each large piece and the central cluster's edge (Option B).
     public static let ultrawideClusterGap: CGFloat = 24
+
+    /// Ultrawide cluster step: slips lay side-by-side at full pitch while
+    /// they fit the available span (no overlap); only beyond fit do they
+    /// shingle (collapsed) or compress (expanded).
+    public static func ultrawideClusterStep(
+        slipCount: Int,
+        expanded: Bool,
+        availableWidth: CGFloat
+    ) -> CGFloat {
+        let needed = CGFloat(slipCount) * sideBySidePitch - slipSpacing
+        if needed <= availableWidth { return sideBySidePitch }
+        if !expanded { return shingledStep }
+        guard slipCount > 1 else { return sideBySidePitch }
+        return min(sideBySidePitch, max(0, availableWidth - slipWidth) / CGFloat(slipCount - 1))
+    }
 
     // MARK: - Slot-stable cluster layout (correction v1-app2)
 
