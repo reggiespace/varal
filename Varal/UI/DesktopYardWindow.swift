@@ -14,6 +14,15 @@ public final class DesktopYardWindow: NSWindow {
     public static let selectedScreenKey = "selectedScreenDisplayID"
 
     public var hitTestPolygons: [CGRect] = []
+
+    /// True while a piece or slip slides on the line: the yard keeps the
+    /// pointer (and may take key focus so Esc cancels) until release, even
+    /// when the pointer crosses a gap between hit polygons.
+    public var isDraggingOnLine = false {
+        didSet { if isDraggingOnLine { ignoresMouseEvents = false } }
+    }
+
+    public override var canBecomeKey: Bool { isDraggingOnLine }
     private nonisolated(unsafe) var monitor: Any?
 
     public var selectedScreen: NSScreen {
@@ -115,6 +124,10 @@ public final class DesktopYardWindow: NSWindow {
     }
 
     private func updateMouseTransparency(for event: NSEvent) {
+        if isDraggingOnLine {
+            if ignoresMouseEvents { ignoresMouseEvents = false }
+            return
+        }
         let mouse = NSEvent.mouseLocation // global bottom-left origin
         // Canvas polygons use top-left origin relative to the selected
         // screen; convert to global bottom-left space for the hit test.

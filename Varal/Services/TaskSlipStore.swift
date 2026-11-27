@@ -123,6 +123,28 @@ public final class TaskSlipStore {
         return true
     }
 
+    /// Slide reorder: moves `id` to `position` in the occupied-slot order.
+    /// Only hanging slips are permuted; empty pins (basket slips) keep their
+    /// `pinSlotIndex` so basket undo still lands on its own pin.
+    @discardableResult
+    public func reorderHanging(id: UUID, toPosition position: Int) -> Bool {
+        guard canPersist else { return false }
+        let hanging = hangingSlips.map { (id: $0.id, slot: $0.pinSlotIndex) }
+        guard hanging.contains(where: { $0.id == id }) else { return false }
+        let remap = LineDrag.reorderedSlots(occupied: hanging, moving: id, toPosition: position)
+        let previous = slips
+        var changed = false
+        for i in slips.indices {
+            if let slot = remap[slips[i].id], slips[i].pinSlotIndex != slot {
+                slips[i].pinSlotIndex = slot
+                changed = true
+            }
+        }
+        guard changed else { return true }
+        guard save() else { slips = previous; return false }
+        return true
+    }
+
     public func removeSlip(id: UUID) {
         guard canPersist else { return }
         let previous = slips

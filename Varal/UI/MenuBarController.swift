@@ -155,6 +155,11 @@ public final class MenuBarController {
 
     private func localeOfPopover() -> AppLocale { AppLocale.current() }
 
+    /// Re-reads the line after a desktop drag committed a new order.
+    public func lineRearranged() {
+        if popover.isShown { rebuildPopover() }
+    }
+
     @objc private func submitQuickAdd() {
         let text = quickField.stringValue
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }

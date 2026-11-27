@@ -21,11 +21,20 @@ public final class TaskSlipView: NSView {
     private var pull: CGFloat = 0
     private var dragStart: NSPoint = .zero
     private var dragStartOrigin: NSPoint = .zero
+    /// Pointer is down on this slip.
     private(set) public var isDragging = false
+    /// The drag was read as a tear (downward-dominant first 6pt).
+    public var isTearing: Bool { isDragging && intent == .tear }
+    private var intent: LineDrag.Intent = .undecided
 
     /// Phase C completion: slip detached at view-space point.
     public var onTearOff: ((UUID) -> Void)?
     public var onPullChanged: ((UUID, CGFloat) -> Void)?
+    /// Sideways intent: the canvas slides the slip along the cluster.
+    /// Arguments are window-space x (or point) and the event timestamp.
+    public var onSlideBegan: ((UUID, CGFloat, TimeInterval) -> Void)?
+    public var onSlideMoved: ((UUID, CGFloat, TimeInterval) -> Void)?
+    public var onSlideEnded: ((UUID, NSPoint) -> Void)?
 
     public init(slip: TaskSlip) {
         self.slipID = slip.id
@@ -130,43 +139,68 @@ public final class TaskSlipView: NSView {
         (title as NSString).draw(in: titleRect, withAttributes: titleAttrs)
     }
 
-    // MARK: - Drag gesture (pointer-following)
+    // MARK: - Drag gesture (intent, then tear or slide)
 
     public override func mouseDown(with event: NSEvent) {
         dragStart = event.locationInWindow
         dragStartOrigin = frame.origin
+        intent = .undecided
         isDragging = true
     }
 
     public override func mouseDragged(with event: NSEvent) {
         guard isDragging else { return }
+        let dx = event.locationInWindow.x - dragStart.x
         let dy = dragStart.y - event.locationInWindow.y // downward positive
-        pull = max(0, dy)
-        // The slip itself follows the pointer; the canvas adds the local
-        // rope dip (0.45 * pull) to the rope curve while dragging.
-        let flipped = superview?.isFlipped ?? true
-        setFrameOrigin(NSPoint(
-            x: dragStartOrigin.x,
-            y: dragStartOrigin.y + (flipped ? pull : -pull)))
-        // Phase B: tilt 0° -> 10° (frameRotation is in degrees).
-        let tilt: CGFloat = pull <= 18 ? 0 : min(10, 10 * (pull - 18) / 30)
-        frameRotation = tilt
-        needsDisplay = true
-        onPullChanged?(slipID, pull)
+        if intent == .undecided {
+            // The first 6pt decide; a misread can never complete a task.
+            intent = LineDrag.classifySlipIntent(dx: dx, dy: dy)
+            if intent == .slide {
+                onSlideBegan?(slipID, dragStart.x, event.timestamp)
+            }
+        }
+        switch intent {
+        case .tear:
+            pull = max(0, dy)
+            // The slip itself follows the pointer; the canvas adds the local
+            // rope dip (0.45 * pull) to the rope curve while dragging.
+            let flipped = superview?.isFlipped ?? true
+            setFrameOrigin(NSPoint(
+                x: dragStartOrigin.x,
+                y: dragStartOrigin.y + (flipped ? pull : -pull)))
+            // Phase B: tilt 0° -> 10° (frameRotation is in degrees).
+            let tilt: CGFloat = pull <= 18 ? 0 : min(10, 10 * (pull - 18) / 30)
+            frameRotation = tilt
+            needsDisplay = true
+            onPullChanged?(slipID, pull)
+        case .slide:
+            onSlideMoved?(slipID, event.locationInWindow.x, event.timestamp)
+        case .undecided, .none:
+            break
+        }
     }
 
     public override func mouseUp(with event: NSEvent) {
         guard isDragging else { return }
         isDragging = false
-        if ClotheslineMath.tearPhase(pull: pull) == .snap {
-            onTearOff?(slipID)
-        } else {
-            // Release in A/B springs back without completing; the canvas
-            // re-seats the slip on its pin.
-            pull = 0
-            frameRotation = 0
-            needsDisplay = true
-            onPullChanged?(slipID, 0)
+        let wasIntent = intent
+        intent = .undecided
+        switch wasIntent {
+        case .tear:
+            if ClotheslineMath.tearPhase(pull: pull) == .snap {
+                onTearOff?(slipID)
+            } else {
+                // Release in A/B springs back without completing; the canvas
+                // re-seats the slip on its pin.
+                pull = 0
+                frameRotation = 0
+                needsDisplay = true
+                onPullChanged?(slipID, 0)
+            }
+        case .slide:
+            onSlideEnded?(slipID, event.locationInWindow)
+        case .undecided, .none:
+            break
         }
         pull = 0
         needsDisplay = true

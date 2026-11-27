@@ -24,6 +24,11 @@ private final class YardStubPiece: NSObject, CompanionPiece {
 }
 
 @MainActor
+func isolatedPieceOrder() -> PieceOrderStore {
+    PieceOrderStore(defaults: UserDefaults(suiteName: "varal-tests-\(UUID().uuidString)")!)
+}
+
+@MainActor
 private func makeYard(
     width: CGFloat = 3440, height: CGFloat = 1440, slipCount: Int = 6
 ) -> (ClotheslineCanvasView, TaskSlipStore) {
@@ -42,7 +47,7 @@ private func makeYard(
         YardStubPiece(pieceID: "get-long-weekend", side: .trailing),
     ]
     let canvas = ClotheslineCanvasView(
-        slipStore: store, planStore: plans,
+        slipStore: store, planStore: plans, pieceOrder: isolatedPieceOrder(),
         pieces: { pieces }, environment: { nil })
     canvas.frame = NSRect(x: 0, y: 0, width: width, height: height)
     canvas.refresh()
@@ -61,7 +66,7 @@ struct YardLayoutTests {
         #expect(ClotheslineMath.lineY(topSafeInset: 30) == 58)
     }
 
-    // MARK: - Ultrawide gate + Option B (fixed gap from central cluster)
+    // MARK: - Ultrawide gate
 
     @Test("ultrawide gate is aspect-based")
     func ultrawideGate() {
@@ -72,80 +77,105 @@ struct YardLayoutTests {
         #expect(ClotheslineMath.isUltrawide(size: CGSize(width: 1080, height: 1920)) == false)
     }
 
-    @Test("3440 yard: Option B fixed gap from cluster edge, yields outward when expanded")
-    func ultrawideYardOptionB() {
-        let (canvas, _) = makeYard()
-        let collapsed = canvas.computeLayout()
-        let gap: CGFloat = 24.0
+    // MARK: - Fixed-gap rule (design 2026-11-23, Phase 1)
 
-        // Collapsed state: 6 slips shingle at shingledStep (38pt), centered in 3440
-        #expect(collapsed.slipFrames.count == 6)
-        let cXs = collapsed.slipFrames.map(\.frame.minX).sorted()
-        for i in 1..<cXs.count {
-            #expect(abs((cXs[i] - cXs[i - 1]) - 38.0) < 0.001)
-        }
-        let cLeading = collapsed.pieceFrames.first { $0.id == "atmos" }!.frame
-        let cTrailing = collapsed.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
-        let firstSlipMinX = cXs.first!
-        let lastSlipMaxX = collapsed.slipFrames.map(\.frame.maxX).max()!
-
-        // Each large piece sits at fixed gap (24pt) from the cluster's edge.
-        #expect(abs(firstSlipMinX - cLeading.maxX - gap) < 0.5)
-        #expect(abs(cTrailing.minX - lastSlipMaxX - gap) < 0.5)
-
-        // Expanded state: cluster expands to full pitch (116pt), pieces yield outward
-        canvas.engine.setClusterExpanded(true)
-        let expanded = canvas.computeLayout()
-        #expect(expanded.slipFrames.count == 6)
-        let eXs = expanded.slipFrames.map(\.frame.minX).sorted()
-        for i in 1..<eXs.count {
-            #expect(abs((eXs[i] - eXs[i - 1]) - 116.0) < 0.001)
-        }
-        let eLeading = expanded.pieceFrames.first { $0.id == "atmos" }!.frame
-        let eTrailing = expanded.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
-        let expFirstSlipMinX = eXs.first!
-        let expLastSlipMaxX = expanded.slipFrames.map(\.frame.maxX).max()!
-
-        // Fixed gap maintained in expanded state as well.
-        #expect(abs(expFirstSlipMinX - eLeading.maxX - gap) < 0.5)
-        #expect(abs(eTrailing.minX - expLastSlipMaxX - gap) < 0.5)
-
-        // Pieces yielded outward along the rope:
-        #expect(eLeading.minX < cLeading.minX)
-        #expect(eTrailing.minX > cTrailing.minX)
-        let clusterGrowth = (expLastSlipMaxX - expFirstSlipMinX) - (lastSlipMaxX - firstSlipMinX)
-        #expect(abs((cLeading.minX - eLeading.minX) - clusterGrowth / 2) < 0.5)
-        #expect(abs((eTrailing.minX - cTrailing.minX) - clusterGrowth / 2) < 0.5)
-
-        // Disjoint rects: no overlap between slips or with pieces.
-        var allRects = expanded.slipFrames.map(\.frame)
-        allRects.append(eLeading)
-        allRects.append(eTrailing)
-        for i in allRects.indices {
-            for j in allRects.indices where j > i {
-                #expect(!allRects[i].intersects(allRects[j]))
-            }
-        }
-        // Slips hang from the rope: tops on the 0.925 deflection line.
-        for f in expanded.slipFrames {
-            #expect(abs(f.frame.minY - (expanded.line1Y + expanded.sag1 * 0.925)) < 0.5)
+    /// Asserts the gap rule on a landscape layout: pieces a fixed G from the
+    /// cluster edges and hanging from the rope at their centre.
+    private func expectGapRule(_ layout: YardLayout, width: CGFloat) {
+        let leading = layout.pieceFrames.first { $0.id == "atmos" }!.frame
+        let trailing = layout.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        let xs = layout.slipFrames.map(\.frame.minX).sorted()
+        let clusterMin = xs.first!
+        let clusterMax = xs.last! + ClotheslineMath.slipWidth
+        #expect(abs((clusterMin - leading.maxX) - YardGeometry.clusterGap) < 0.001)
+        #expect(abs((trailing.minX - clusterMax) - YardGeometry.clusterGap) < 0.001)
+        for f in [leading, trailing] {
+            let ropeY = YardGeometry.ropeY(x: f.midX, width: width, lineY: layout.line1Y, sag: layout.sag1)
+            #expect(abs(f.minY - ropeY) < 0.001)
         }
     }
 
-    @Test("1920x1080 and portrait keep legacy geometry")
-    func legacyUnchanged() {
-        // 1920x1080: edge-anchored pieces, shingled cluster for 6 slips.
+    @Test("16:9 at rest: pieces sit G from the centred cluster")
+    func gapRuleAtRest169() {
         let (canvas, _) = makeYard(width: 1920, height: 1080)
         let layout = canvas.computeLayout()
-        let leading = layout.pieceFrames.first { $0.id == "atmos" }!.frame
-        let trailing = layout.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
-        #expect(leading.minX == 24)
-        #expect(trailing.maxX == CGFloat(1920 - 24))
+        expectGapRule(layout, width: 1920)
+        // 6 slips shingle at 38pt, centred on the display.
         let xs = layout.slipFrames.map(\.frame.minX).sorted()
         for i in 1..<xs.count {
             #expect(abs((xs[i] - xs[i - 1]) - ClotheslineMath.shingledStep) < 0.001)
         }
-        // Portrait Dell: two ropes, Line 2 slips, legacy edge pieces.
+        let mid = (xs.first! + xs.last! + ClotheslineMath.slipWidth) / 2
+        #expect(abs(mid - 960) < 0.001)
+        let leading = layout.pieceFrames.first { $0.id == "atmos" }!.frame
+        #expect(leading.minX > 24) // no longer edge-anchored
+    }
+
+    @Test("3440 at rest: G rule, side-by-side slips, no overlap")
+    func gapRuleAtRestUltrawide() {
+        let (canvas, _) = makeYard()
+        let layout = canvas.computeLayout()
+        expectGapRule(layout, width: 3440)
+        #expect(layout.slipFrames.count == 6)
+        let xs = layout.slipFrames.map(\.frame.minX).sorted()
+        for i in 1..<xs.count {
+            #expect(abs((xs[i] - xs[i - 1]) - ClotheslineMath.sideBySidePitch) < 0.001)
+        }
+        let rects = layout.slipFrames.map(\.frame)
+        for i in rects.indices {
+            for j in rects.indices where j > i {
+                #expect(!rects[i].intersects(rects[j]))
+            }
+        }
+        for f in layout.slipFrames {
+            #expect(abs(f.frame.minY - (layout.line1Y + layout.sag1 * 0.925)) < 0.5)
+        }
+    }
+
+    @Test("16:9 expansion pushes both stacks out by half the growth (zero-cap regression)")
+    func expansionPushesStacks169() {
+        let (canvas, _) = makeYard(width: 1920, height: 1080)
+        let before = canvas.computeLayout()
+        let lead0 = before.pieceFrames.first { $0.id == "atmos" }!.frame
+        let trail0 = before.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        let w0 = before.clusterRect.width
+        canvas.setClusterExpanded(true)
+        let after = canvas.computeLayout()
+        let lead1 = after.pieceFrames.first { $0.id == "atmos" }!.frame
+        let trail1 = after.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        let growth = after.clusterRect.width - w0
+        #expect(growth > 100)
+        #expect(abs((lead0.minX - lead1.minX) - growth / 2) < 0.001)
+        #expect(abs((trail1.minX - trail0.minX) - growth / 2) < 0.001)
+        expectGapRule(after, width: 1920)
+    }
+
+    @Test("expansion clamps the stacks 24pt from the screen edges")
+    func expansionClampsAtEdge() {
+        let (canvas, _) = makeYard(width: 1280, height: 800, slipCount: 12)
+        canvas.setClusterExpanded(true)
+        let layout = canvas.computeLayout()
+        let leading = layout.pieceFrames.first { $0.id == "atmos" }!.frame
+        let trailing = layout.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        #expect(abs(leading.minX - YardGeometry.edgeMargin) < 0.001)
+        #expect(abs(trailing.maxX - (1280 - YardGeometry.edgeMargin)) < 0.001)
+        expectGapRule(layout, width: 1280)
+    }
+
+    @Test("stack math: one-sided overflow shifts the group off the edge")
+    func stackOverflowShift() {
+        let s = YardGeometry.landscapeStacks(
+            displayWidth: 1000, clusterWidth: 500, leadingWidths: [170, 170], trailingWidths: [])
+        #expect(s.leadingXs.count == 2)
+        #expect(abs(s.leadingXs[0] - 24) < 0.001)
+        #expect(abs(s.leadingXs[1] - 210) < 0.001)
+        let expectedClusterMinX: CGFloat = 24 + 356 + 32
+        #expect(abs(s.clusterMinX - expectedClusterMinX) < 0.001)
+        #expect(s.trailingXs.isEmpty)
+    }
+
+    @Test("portrait keeps two ropes and Line 2 slips")
+    func portraitUnchanged() {
         let (dell, _) = makeYard(width: 1080, height: 1920, slipCount: 4)
         let pl = dell.computeLayout()
         #expect(dell.layoutMode == .portrait)
@@ -153,6 +183,10 @@ struct YardLayoutTests {
         for f in pl.slipFrames {
             #expect(abs(f.frame.minY - (pl.line2Y + pl.sag2 * 0.925)) < 0.5)
         }
+        let leading = pl.pieceFrames.first { $0.id == "atmos" }!.frame
+        let trailing = pl.pieceFrames.first { $0.id == "get-long-weekend" }!.frame
+        #expect(leading.minX == 24)
+        #expect(trailing.maxX == CGFloat(1080 - 24))
     }
 
     // MARK: - Empty pin stays, others do not shift (review finding)
