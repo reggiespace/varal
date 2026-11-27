@@ -224,13 +224,6 @@ public enum LineDrag: Sendable {
         (dx * dx + dy * dy).squareRoot() >= intentThreshold
     }
 
-    /// Menu mirror slides pieces in any direction, while slips require a
-    /// horizontal first movement.
-    public static func menuSlideStarts(isPiece: Bool, dx: CGFloat, dy: CGFloat) -> Bool {
-        if isPiece { return pieceSlideStarts(dx: dx, dy: dy) }
-        return classifySlipIntent(dx: dx, dy: dy) == .slide
-    }
-
     /// Past `[minX, maxX]` the position follows at 30%.
     public static func rubberBanded(_ x: CGFloat, minX: CGFloat, maxX: CGFloat) -> (x: CGFloat, blocked: Bool) {
         if x < minX { return (minX + (x - minX) * rubberBand, true) }

@@ -85,8 +85,6 @@ final class VaralApp: NSObject, NSApplicationDelegate {
             self?.governor?.refreshLive()
             self?.canvas?.refresh()
         }
-        menuBar.canPlacePiece = { [weak canvas] id, slot in canvas?.canPlacePiece(id, at: slot) ?? true }
-        menuBar.onLineRearranged = { [weak canvas] in canvas?.refresh() }
         canvas.onLineRearranged = { [weak menuBar] in menuBar?.lineRearranged() }
         menuBar.install()
         self.menuBar = menuBar

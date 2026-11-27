@@ -69,15 +69,6 @@ struct LineDragTests {
         #expect(LineDrag.pieceSlideStarts(dx: 4, dy: 4.5) == true)
     }
 
-    @Test("menu mirror uses any-direction piece slides and horizontal slip slides")
-    func menuMirrorSlideRules() {
-        #expect(LineDrag.menuSlideStarts(isPiece: true, dx: 0, dy: 6))
-        #expect(LineDrag.menuSlideStarts(isPiece: true, dx: 4, dy: 5))
-        #expect(LineDrag.menuSlideStarts(isPiece: false, dx: 6, dy: 0))
-        #expect(!LineDrag.menuSlideStarts(isPiece: false, dx: 0, dy: 6))
-        #expect(!LineDrag.menuSlideStarts(isPiece: false, dx: 4, dy: 5))
-    }
-
     @Test("a sideways slip drag slides and never tears, however far it goes")
     func sidewaysNeverTears() {
         let view = TaskSlipView(slip: TaskSlip(timeLabel: "09:30", title: "Gym", createdAt: Date(), pinSlotIndex: 0))
@@ -361,10 +352,8 @@ struct PieceViewSizingTests {
             planStore: planStore,
             allPieces: pieces,
             pieces: { pieces },
-            governor: OcclusionGovernor(),
-            pieceOrder: pieceOrder
+            governor: OcclusionGovernor()
         )
-        menuBar.onLineRearranged = { [weak canvas] in canvas?.refresh() }
         canvas.onLineRearranged = { [weak menuBar] in menuBar?.lineRearranged() }
 
         canvas.refresh()
@@ -433,15 +422,6 @@ struct PieceViewSizingTests {
         // Phase 1: Initial layout
         assertPieceSizes(message: "Initial layout")
 
-        // Capture offscreen render screenshot evidence
-        if let rep = rig.canvas.bitmapImageRepForCachingDisplay(in: rig.canvas.bounds) {
-            rig.canvas.cacheDisplay(in: rig.canvas.bounds, to: rep)
-            if let png = rep.representation(using: .png, properties: [:]) {
-                let outURL = URL(fileURLWithPath: "/Users/reggie/firstmate/data/varal-draggable-pieces/screenshot-evidence.png")
-                try? png.write(to: outURL)
-            }
-        }
-
         // Phase 2: Relayout
         rig.canvas.refresh()
         rig.window.layoutIfNeeded()
@@ -480,13 +460,13 @@ struct PieceViewSizingTests {
         rig.canvas.layoutSubtreeIfNeeded()
         assertPieceSizes(message: "After side switch")
 
-        // Phase 5: Menu-bar mirror rearrangement
-        let mirrorOrder = PieceArrangement(leading: [rig.atmos.pieceID, rig.glw.pieceID], trailing: [])
-        rig.pieceOrder.save(mirrorOrder)
-        rig.menuBar.onLineRearranged?()
+        // Phase 5: Rearrangement refresh
+        let newOrder = PieceArrangement(leading: [rig.atmos.pieceID, rig.glw.pieceID], trailing: [])
+        rig.pieceOrder.save(newOrder)
+        rig.canvas.refresh()
         rig.window.layoutIfNeeded()
         rig.canvas.layoutSubtreeIfNeeded()
-        assertPieceSizes(message: "After menu-bar mirror rearrangement")
+        assertPieceSizes(message: "After rearrangement refresh")
     }
 }
 

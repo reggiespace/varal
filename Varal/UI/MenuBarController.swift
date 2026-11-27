@@ -14,7 +14,6 @@ public final class MenuBarController {
     private let piecesProvider: () -> [any CompanionPiece]
     private let allPieces: [any CompanionPiece]
     private let governor: OcclusionGovernor
-    private let pieceOrder: PieceOrderStore
 
     private var statusItem: NSStatusItem?
     private var popover = NSPopover()
@@ -25,11 +24,6 @@ public final class MenuBarController {
     private var settingsPanel: NSPanel?
 
     public var onQuickAdd: (() -> Void)?
-    /// Whether a big piece fits in a slot on the real yard (gap rule + 24pt
-    /// edge margins). Set by the app from the desktop canvas.
-    public var canPlacePiece: ((String, PieceArrangement.Slot) -> Bool)?
-    /// A mirror slide committed a new order: refresh the desktop line.
-    public var onLineRearranged: (() -> Void)?
     public var onPauseToggled: ((Bool) -> Void)?
 
     public init(
@@ -37,10 +31,8 @@ public final class MenuBarController {
         planStore: HolidayPlanStore,
         allPieces: [any CompanionPiece],
         pieces: @escaping () -> [any CompanionPiece],
-        governor: OcclusionGovernor,
-        pieceOrder: PieceOrderStore = PieceOrderStore()
+        governor: OcclusionGovernor
     ) {
-        self.pieceOrder = pieceOrder
         self.slipStore = slipStore
         self.planStore = planStore
         self.allPieces = allPieces
@@ -99,23 +91,6 @@ public final class MenuBarController {
         vc.view = root
 
         miniLine.frame = NSRect(x: 10, y: 240, width: 240, height: 60)
-        miniLine.onPieceMoved = { [weak self] id, slot in
-            guard let self else { return false }
-            guard self.canPlacePiece?(id, slot) ?? true else { return false }
-            let current = self.currentArrangement()
-            let next = current.moving(id, to: slot)
-            if next != current { self.pieceOrder.save(next) }
-            self.rebuildPopover()
-            self.onLineRearranged?()
-            return true
-        }
-        miniLine.onSlipMoved = { [weak self] id, position in
-            guard let self else { return }
-            self.slipStore.reorderHanging(id: id, toPosition: position)
-            self.rebuildPopover()
-            self.onLineRearranged?()
-        }
-        miniLine.canPlacePiece = { [weak self] id, slot in self?.canPlacePiece?(id, slot) ?? true }
         root.addSubview(miniLine)
 
         quickField.frame = NSRect(x: 10, y: 208, width: 240, height: 24)
@@ -154,10 +129,8 @@ public final class MenuBarController {
 
     private func rebuildPopover() {
         guard let root = popover.contentViewController?.view else { return }
-        let arrangement = currentArrangement()
-        miniLine.leading = arrangement.leading
-        miniLine.trailing = arrangement.trailing
-        miniLine.slips = slipStore.hangingSlips.sorted { $0.pinSlotIndex < $1.pinSlotIndex }.map(\.id)
+        miniLine.hangingCount = slipStore.hangingSlips.count
+        miniLine.pieceCount = piecesProvider().count
         miniLine.needsDisplay = true
 
         listStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -181,10 +154,6 @@ public final class MenuBarController {
     }
 
     private func localeOfPopover() -> AppLocale { AppLocale.current() }
-
-    private func currentArrangement() -> PieceArrangement {
-        pieceOrder.resolve(active: piecesProvider().map { (id: $0.pieceID, side: $0.preferredSide) })
-    }
 
     /// Re-reads the line after a desktop drag committed a new order.
     public func lineRearranged() {
@@ -280,201 +249,30 @@ public extension Notification.Name {
     static let varalDisplayChanged = Notification.Name("ca.reggiespace.varal.displayChanged")
 }
 
-/// Lightweight mirror of the line for the popover: big pieces, the slip
-/// cluster and the same horizontal slide as the desktop (Option A). Tearing
-/// stays on the per-slip button; a drag here only reorders.
-final class MiniLineView: NSView {
-    var leading: [String] = []
-    var trailing: [String] = []
-    var slips: [UUID] = []
-    var onPieceMoved: ((String, PieceArrangement.Slot) -> Bool)?
-    var onSlipMoved: ((UUID, Int) -> Void)?
-    var canPlacePiece: ((String, PieceArrangement.Slot) -> Bool)?
-
-    enum Item: Equatable {
-        case piece(String)
-        case slip(UUID)
-    }
-
-    static let pieceSize = NSSize(width: 26, height: 18)
-    static let slipSize = NSSize(width: 12, height: 16)
-    static let slipStep: CGFloat = 14
-    static let gap: CGFloat = 8
-    static let spacing: CGFloat = 4
-    static let ropeY: CGFloat = 14
-
-    private var dragItem: Item?
-    private var pressItem: Item?
-    private var startX: CGFloat = 0
-    private var startY: CGFloat = 0
-    private var dx: CGFloat = 0
-    private var pieceTarget: PieceArrangement.Slot?
-    private var slipTarget: Int?
-    private var blocked = false
-
-    override var isFlipped: Bool { true }
-
-    private var arrangement: PieceArrangement { PieceArrangement(leading: leading, trailing: trailing) }
-
-    /// Frames for an arrangement + slip order (live preview while dragging).
-    func frames(arrangement: PieceArrangement, slips: [UUID]) -> [(Item, CGRect)] {
-        let W = bounds.width
-        let cw = slips.isEmpty ? 0 : Self.slipSize.width + Self.slipStep * CGFloat(slips.count - 1)
-        let leadW = CGFloat(arrangement.leading.count) * (Self.pieceSize.width + Self.spacing) - (arrangement.leading.isEmpty ? 0 : Self.spacing)
-        let cl = W / 2 - cw / 2
-        var out: [(Item, CGRect)] = []
-        var x = cl - (arrangement.leading.isEmpty ? 0 : Self.gap) - leadW
-        for id in arrangement.leading {
-            out.append((.piece(id), CGRect(x: x, y: Self.ropeY - 2, width: Self.pieceSize.width, height: Self.pieceSize.height)))
-            x += Self.pieceSize.width + Self.spacing
-        }
-        for (i, id) in slips.enumerated() {
-            out.append((.slip(id), CGRect(x: cl + CGFloat(i) * Self.slipStep, y: Self.ropeY - 2, width: Self.slipSize.width, height: Self.slipSize.height)))
-        }
-        x = cl + cw + (arrangement.trailing.isEmpty ? 0 : Self.gap)
-        for id in arrangement.trailing {
-            out.append((.piece(id), CGRect(x: x, y: Self.ropeY - 2, width: Self.pieceSize.width, height: Self.pieceSize.height)))
-            x += Self.pieceSize.width + Self.spacing
-        }
-        return out
-    }
-
-    private func previewFrames() -> [(Item, CGRect)] {
-        var arr = arrangement
-        var order = slips
-        if !blocked {
-            if case .piece(let id)? = dragItem, let t = pieceTarget { arr = arr.moving(id, to: t) }
-            if case .slip(let id)? = dragItem, let t = slipTarget, let from = order.firstIndex(of: id) {
-                order.remove(at: from)
-                order.insert(id, at: min(t, order.count))
-            }
-        }
-        var result = frames(arrangement: arr, slips: order)
-        if let dragItem, let home = frames(arrangement: arrangement, slips: slips).first(where: { $0.0 == dragItem })?.1,
-           let i = result.firstIndex(where: { $0.0 == dragItem }) {
-            var x = home.minX + dx
-            if case .slip = dragItem {
-                let slipXs = frames(arrangement: arrangement, slips: slips).filter {
-                    if case .slip = $0.0 { return true } else { return false }
-                }.map(\.1.minX)
-                if let lo = slipXs.min(), let hi = slipXs.max() {
-                    x = LineDrag.rubberBanded(x, minX: lo, maxX: hi).x
-                }
-            }
-            result[i].1 = CGRect(x: x, y: home.minY - 2, width: home.width, height: home.height)
-        }
-        return result
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        pressItem = frames(arrangement: arrangement, slips: slips).first { $0.1.contains(p) }?.0
-        startX = p.x
-        startY = p.y
-        dx = 0
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        if dragItem == nil {
-            guard let pressItem else { return }
-            let dx = p.x - startX
-            let dy = p.y - startY
-            switch pressItem {
-            case .piece:
-                guard LineDrag.menuSlideStarts(isPiece: true, dx: dx, dy: dy) else { return }
-            case .slip:
-                guard LineDrag.menuSlideStarts(isPiece: false, dx: dx, dy: dy) else { return }
-            }
-            dragItem = pressItem
-        }
-        dx = p.x - startX
-        retarget()
-        needsDisplay = true
-    }
-
-    private func retarget() {
-        guard let dragItem else { return }
-        let rest = frames(arrangement: arrangement, slips: slips)
-        guard let home = rest.first(where: { $0.0 == dragItem })?.1 else { return }
-        let x = home.minX + dx
-        switch dragItem {
-        case .piece(let id):
-            let preview = previewFrames().filter { $0.0 != dragItem }
-            let slipXs = rest.compactMap { item, f -> CGFloat? in if case .slip = item { return f.midX } else { return nil } }
-            let divider = slipXs.isEmpty ? bounds.width / 2 : (slipXs.min()! + slipXs.max()!) / 2
-            var previewArr = arrangement
-            if !blocked, let t = pieceTarget { previewArr = arrangement.moving(id, to: t) }
-            let leadSet = Set(previewArr.leading)
-            let lc = preview.compactMap { item, f -> CGFloat? in
-                if case .piece(let other) = item, leadSet.contains(other) { return f.midX }
-                return nil
-            }
-            let tc = preview.compactMap { item, f -> CGFloat? in
-                if case .piece(let other) = item, !leadSet.contains(other) { return f.midX }
-                return nil
-            }
-            let target = LineDrag.pieceTarget(
-                centerX: x + home.width / 2, dividerX: divider,
-                remainingLeadingCenters: lc, remainingTrailingCenters: tc)
-            blocked = !(canPlacePiece?(id, target) ?? true)
-            if !blocked { pieceTarget = target }
-        case .slip:
-            let slipXs = rest.compactMap { item, f -> CGFloat? in if case .slip = item { return f.minX } else { return nil } }
-            guard let lo = slipXs.min(), let hi = slipXs.max() else { return }
-            blocked = LineDrag.rubberBanded(x, minX: lo, maxX: hi).blocked
-            if !blocked { slipTarget = LineDrag.slipTargetPosition(x: x, occupiedOrigins: slipXs) }
-        }
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        defer {
-            dragItem = nil; pressItem = nil; pieceTarget = nil; slipTarget = nil; blocked = false; dx = 0
-            needsDisplay = true
-        }
-        guard let dragItem, !blocked else { return }
-        switch dragItem {
-        case .piece(let id):
-            if let t = pieceTarget { _ = onPieceMoved?(id, t) }
-        case .slip(let id):
-            if let t = slipTarget, slips.firstIndex(of: id) != t { onSlipMoved?(id, t) }
-        }
-    }
+/// Lightweight 1D sag/recoil mirror for the popover (runs only while the
+/// popover is shown, per `isPopoverSimulationActive`).
+private final class MiniLineView: NSView {
+    var hangingCount = 0
+    var pieceCount = 0
 
     override func draw(_ dirtyRect: NSRect) {
         let sag = ClotheslineMath.equilibriumSag(
-            bigPieceMassUnits: Array(repeating: 6.0, count: leading.count + trailing.count),
-            hangingSlipCount: slips.count, precipitation: .clear)
-        let y = Self.ropeY
+            bigPieceMassUnits: Array(repeating: 6.0, count: pieceCount),
+            hangingSlipCount: hangingCount, precipitation: .clear)
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: 0, y: y))
-        path.curve(to: NSPoint(x: bounds.width, y: y),
-                   controlPoint1: NSPoint(x: bounds.width * 0.3, y: y + sag * 0.15),
-                   controlPoint2: NSPoint(x: bounds.width * 0.7, y: y + sag * 0.15))
+        path.move(to: NSPoint(x: 0, y: 10))
+        path.curve(to: NSPoint(x: bounds.width, y: 10),
+                   controlPoint1: NSPoint(x: bounds.width * 0.3, y: 10 + sag * 0.4),
+                   controlPoint2: NSPoint(x: bounds.width * 0.7, y: 10 + sag * 0.4))
         NSColor.secondaryLabelColor.setStroke()
         path.lineWidth = 1
         path.stroke()
-        for (item, frame) in previewFrames() {
-            let isDragged = item == dragItem
-            let shape = NSBezierPath(roundedRect: frame, xRadius: 2, yRadius: 2)
-            switch item {
-            case .piece:
-                NSColor.labelColor.withAlphaComponent(0.55).setFill()
-            case .slip:
-                NSColor.textBackgroundColor.setFill()
-            }
-            shape.fill()
-            if isDragged && blocked {
-                NSColor(calibratedRed: 0xC2 / 255.0, green: 0x41 / 255.0, blue: 0x0C / 255.0, alpha: 1).setStroke()
-                shape.lineWidth = 1.5
-            } else {
-                NSColor.secondaryLabelColor.setStroke()
-                shape.lineWidth = 0.75
-            }
-            shape.stroke()
-            // Pin straddling the rope.
+        // Mini pins.
+        for i in 0..<(pieceCount * 2 + hangingCount) {
+            let x = 12 + CGFloat(i) * (bounds.width - 24) / CGFloat(max(1, pieceCount * 2 + hangingCount))
+            let pin = NSBezierPath(rect: NSRect(x: x, y: 8, width: 3, height: 10))
             NSColor.labelColor.setFill()
-            NSBezierPath(rect: NSRect(x: frame.midX - 1.5, y: frame.minY - 4, width: 3, height: 7)).fill()
+            pin.fill()
         }
     }
 }
