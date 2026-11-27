@@ -524,37 +524,40 @@ public final class ClotheslineCanvasView: NSView {
     private func applyLayout(_ layout: YardLayout) {
         for frame in layout.pieceFrames {
             guard let v = pieceViews[frame.id] else { continue }
-            place(v, key: Self.key(piece: frame.id), to: frame.frame.origin)
+            place(v, key: Self.key(piece: frame.id), to: frame.frame)
         }
         for slipFrame in layout.slipFrames {
             guard let v = slipViews[slipFrame.id],
                   flutterTimers[slipFrame.id] == nil,
                   !v.isTearing else { continue }
-            place(v, key: Self.key(slip: slipFrame.id), to: slipFrame.frame.origin)
+            place(v, key: Self.key(slip: slipFrame.id), to: slipFrame.frame)
         }
         applyDragStyling(layout)
     }
 
-    private func place(_ view: NSView, key: String, to target: NSPoint) {
+    private func place(_ view: NSView, key: String, to target: CGRect) {
+        if view.frame.size != target.size {
+            view.setFrameSize(target.size)
+        }
         if key == draggedKey {
-            view.setFrameOrigin(target)
+            view.setFrameOrigin(target.origin)
             return
         }
         let animating = session != nil || xSprings[key] != nil
-        guard animating, abs(view.frame.minX - target.x) > 0.5 || xSprings[key] != nil else {
-            view.setFrameOrigin(target)
+        guard animating, abs(view.frame.minX - target.minX) > 0.5 || xSprings[key] != nil else {
+            view.setFrameOrigin(target.origin)
             return
         }
         if motionActive {
             // Neighbours yield on the ζ 0.8 spring (no overshoot).
             if xSprings[key] == nil { xSprings[key] = .init(position: view.frame.minX) }
-            xTargets[key] = target.x
-            view.setFrameOrigin(NSPoint(x: xSprings[key]!.position, y: target.y))
+            xTargets[key] = target.minX
+            view.setFrameOrigin(NSPoint(x: xSprings[key]!.position, y: target.minY))
         } else {
             // Reduce Motion / Pause Breeze: cross-fade to the new slot.
             xSprings.removeValue(forKey: key)
-            if abs(view.frame.minX - target.x) > 0.5 { Self.crossFade(view) }
-            view.setFrameOrigin(target)
+            if abs(view.frame.minX - target.minX) > 0.5 { Self.crossFade(view) }
+            view.setFrameOrigin(target.origin)
         }
     }
 

@@ -11,6 +11,16 @@ if FileManager.default.fileExists(atPath: distPath) {
     nonSourceFiles.append("dist")
 }
 
+let testingMacrosDylib = "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+let testingMacrosPlugin = "\(testingMacrosDylib)#/Library/Developer/CommandLineTools/usr/bin/swift-plugin-server#TestingMacros"
+var testSwiftSettings: [SwiftSetting] = []
+if FileManager.default.fileExists(atPath: testingMacrosDylib) {
+    testSwiftSettings.append(.unsafeFlags([
+        "-Xfrontend", "-load-resolved-plugin",
+        "-Xfrontend", testingMacrosPlugin,
+    ]))
+}
+
 let package = Package(
     name: "Varal",
     platforms: [.macOS(.v14)],
@@ -65,7 +75,8 @@ let package = Package(
         .testTarget(
             name: "VaralTests",
             dependencies: ["VaralKit"],
-            path: "VaralTests"
+            path: "VaralTests",
+            swiftSettings: testSwiftSettings
         ),
     ]
 )

@@ -285,3 +285,208 @@ struct LineDragTests {
         #expect(store.hangingSlips.map(\.pinSlotIndex) == before)
     }
 }
+
+// MARK: - Regression: Piece view and WKWebView sizing (C12/C13 + AppKit layout)
+
+@Suite("PieceViewSizing")
+@MainActor
+struct PieceViewSizingTests {
+    @MainActor
+    private struct TestRig {
+        let window: NSWindow
+        let canvas: ClotheslineCanvasView
+        let slipStore: TaskSlipStore
+        let planStore: HolidayPlanStore
+        let pieceOrder: PieceOrderStore
+        let atmos: AtmosPiece
+        let glw: GetLongWeekendPiece
+        let menuBar: MenuBarController
+        let tempDir: URL
+
+        func cleanup() {
+            atmos.setEnabled(false)
+            window.orderOut(nil)
+            window.contentView = nil
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+    }
+
+    private func makeRig(
+        width: CGFloat = 1920,
+        height: CGFloat = 1080,
+        slipCount: Int = 4
+    ) -> TestRig {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("varal-piece-sizing-test-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        let slipStore = TaskSlipStore(fileURL: tempDir.appendingPathComponent("slips.json"))
+        let now = Date()
+        for i in 0..<slipCount {
+            slipStore.pin(TaskSlip(
+                timeLabel: String(format: "%02d:00", 9 + i),
+                title: "Task \(i)",
+                createdAt: now,
+                pinSlotIndex: i
+            ))
+        }
+
+        let planStore = HolidayPlanStore(fileURL: tempDir.appendingPathComponent("plans.json"), slipStore: slipStore)
+        let pieceOrder = isolatedPieceOrder()
+
+        let atmos = AtmosPiece()
+        atmos.setEnabled(true)
+        let glw = GetLongWeekendPiece(planStore: planStore)
+        let pieces: [any CompanionPiece] = [atmos, glw]
+
+        let canvas = ClotheslineCanvasView(
+            slipStore: slipStore,
+            planStore: planStore,
+            pieceOrder: pieceOrder,
+            pieces: { pieces },
+            environment: { nil }
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = canvas
+        canvas.frame = NSRect(x: 0, y: 0, width: width, height: height)
+
+        let menuBar = MenuBarController(
+            slipStore: slipStore,
+            planStore: planStore,
+            allPieces: pieces,
+            pieces: { pieces },
+            governor: OcclusionGovernor(),
+            pieceOrder: pieceOrder
+        )
+        menuBar.onLineRearranged = { [weak canvas] in canvas?.refresh() }
+        canvas.onLineRearranged = { [weak menuBar] in menuBar?.lineRearranged() }
+
+        canvas.refresh()
+        window.layoutIfNeeded()
+        canvas.layoutSubtreeIfNeeded()
+
+        return TestRig(
+            window: window,
+            canvas: canvas,
+            slipStore: slipStore,
+            planStore: planStore,
+            pieceOrder: pieceOrder,
+            atmos: atmos,
+            glw: glw,
+            menuBar: menuBar,
+            tempDir: tempDir
+        )
+    }
+
+    @Test("piece containers and Atmos WKWebView have layout non-zero size through full lifecycle")
+    func pieceViewAndWebViewSizingLifecycle() {
+        let rig = makeRig(width: 1920, height: 1080)
+        defer { rig.cleanup() }
+
+        func assertPieceSizes(message: String) {
+            let layout = rig.canvas.computeLayout()
+
+            // 1. Atmos piece container and WKWebView sizing
+            guard let atmosFrame = layout.pieceFrames.first(where: { $0.id == rig.atmos.pieceID }) else {
+                Issue.record("Missing Atmos frame in layout (\(message))")
+                return
+            }
+            #expect(atmosFrame.frame.width > 0, "Atmos layout width must be > 0 (\(message))")
+            #expect(atmosFrame.frame.height > 0, "Atmos layout height must be > 0 (\(message))")
+
+            let atmosView = rig.atmos.pieceView
+            #expect(atmosView.frame.size.width == atmosFrame.frame.width, "Atmos view width mismatch (\(message))")
+            #expect(atmosView.frame.size.height == atmosFrame.frame.height, "Atmos view height mismatch (\(message))")
+            #expect(atmosView.frame.width > 0, "Atmos view width must be > 0 (\(message))")
+            #expect(atmosView.frame.height > 0, "Atmos view height must be > 0 (\(message))")
+
+            let webView = atmosView.subviews.first { $0.className.contains("WebView") }
+            #expect(webView != nil, "Atmos WKWebView must be mounted (\(message))")
+            if let webView {
+                #expect(webView.frame.size.width == atmosFrame.frame.width, "Atmos WKWebView width mismatch (\(message))")
+                #expect(webView.frame.size.height == atmosFrame.frame.height, "Atmos WKWebView height mismatch (\(message))")
+                #expect(webView.frame.width > 0, "Atmos WKWebView width must be > 0 (\(message))")
+                #expect(webView.frame.height > 0, "Atmos WKWebView height must be > 0 (\(message))")
+            }
+
+            // 2. Get Long Weekend piece container sizing
+            guard let glwFrame = layout.pieceFrames.first(where: { $0.id == rig.glw.pieceID }) else {
+                Issue.record("Missing GLW frame in layout (\(message))")
+                return
+            }
+            #expect(glwFrame.frame.width > 0, "GLW layout width must be > 0 (\(message))")
+            #expect(glwFrame.frame.height > 0, "GLW layout height must be > 0 (\(message))")
+
+            let glwView = rig.glw.pieceView
+            #expect(glwView.frame.size.width == glwFrame.frame.width, "GLW view width mismatch (\(message))")
+            #expect(glwView.frame.size.height == glwFrame.frame.height, "GLW view height mismatch (\(message))")
+            #expect(glwView.frame.width > 0, "GLW view width must be > 0 (\(message))")
+            #expect(glwView.frame.height > 0, "GLW view height must be > 0 (\(message))")
+        }
+
+        // Phase 1: Initial layout
+        assertPieceSizes(message: "Initial layout")
+
+        // Capture offscreen render screenshot evidence
+        if let rep = rig.canvas.bitmapImageRepForCachingDisplay(in: rig.canvas.bounds) {
+            rig.canvas.cacheDisplay(in: rig.canvas.bounds, to: rep)
+            if let png = rep.representation(using: .png, properties: [:]) {
+                let outURL = URL(fileURLWithPath: "/Users/reggie/firstmate/data/varal-draggable-pieces/screenshot-evidence.png")
+                try? png.write(to: outURL)
+            }
+        }
+
+        // Phase 2: Relayout
+        rig.canvas.refresh()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After relayout")
+
+        // Phase 3: Size change (e.g. ultrawide 3440x1440)
+        rig.window.setContentSize(NSSize(width: 3440, height: 1440))
+        rig.canvas.frame = NSRect(x: 0, y: 0, width: 3440, height: 1440)
+        rig.canvas.refresh()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After size change to 3440x1440")
+
+        // Size change to portrait 1080x1920
+        rig.window.setContentSize(NSSize(width: 1080, height: 1920))
+        rig.canvas.frame = NSRect(x: 0, y: 0, width: 1080, height: 1920)
+        rig.canvas.refresh()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After size change to portrait 1080x1920")
+
+        // Reset back to landscape 1920x1080
+        rig.window.setContentSize(NSSize(width: 1920, height: 1080))
+        rig.canvas.frame = NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        rig.canvas.refresh()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After return to 1920x1080")
+
+        // Phase 4: Side switch (swap leading and trailing pieces)
+        let swapped = PieceArrangement(leading: [rig.glw.pieceID], trailing: [rig.atmos.pieceID])
+        rig.pieceOrder.save(swapped)
+        rig.canvas.refresh()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After side switch")
+
+        // Phase 5: Menu-bar mirror rearrangement
+        let mirrorOrder = PieceArrangement(leading: [rig.atmos.pieceID, rig.glw.pieceID], trailing: [])
+        rig.pieceOrder.save(mirrorOrder)
+        rig.menuBar.onLineRearranged?()
+        rig.window.layoutIfNeeded()
+        rig.canvas.layoutSubtreeIfNeeded()
+        assertPieceSizes(message: "After menu-bar mirror rearrangement")
+    }
+}
+
